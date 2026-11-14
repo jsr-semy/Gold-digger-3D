@@ -42,6 +42,7 @@ details ul{margin:8px 0 0;padding-left:18px}
       <button id="bTele" disabled>Start i VR – teleport</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
+    <p class="note">Versjon 0.2</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
@@ -426,24 +427,26 @@ function doTele(){if(!teleTarget)return;fadeMat.opacity=.8;setTimeout(()=>{fadeM
   else{const[x,z]=wc(teleTarget.x,teleTarget.z),[cx,cz]=cw(x,z);setHeadXZ(cx+(teleTarget.x-cx)*.6,cz+(teleTarget.z-cz)*.6)}teleTarget=null}
 
 /* ================= start ================= */
-async function startXR(m){audio();mode=m;const supAR=await navigator.xr.isSessionSupported('immersive-ar').catch(()=>false);
-  isAR=supAR;const type=isAR?'immersive-ar':'immersive-vr';
-  try{const s=await navigator.xr.requestSession(type,{requiredFeatures:['local-floor'],optionalFeatures:['hand-tracking']});
-    renderer.xr.setReferenceSpaceType('local-floor');await renderer.xr.setSession(s);renderer.xr.setFoveation&&renderer.xr.setFoveation(1);
+let supAR=false;
+async function startXR(m){audio();mode=m;isAR=supAR;const type=isAR?'immersive-ar':'immersive-vr';
+  $('xrnote').textContent='Starter VR …';
+  try{// requestSession må kalles direkte i klikket (uten await før), ellers avviser Quest-nettleseren det
+    const req=navigator.xr.requestSession(type,{optionalFeatures:['local-floor','hand-tracking']});const s=await req;
+    renderer.xr.setReferenceSpaceType('local-floor');try{await renderer.xr.setSession(s)}catch(e){renderer.xr.setReferenceSpaceType('local');await renderer.xr.setSession(s)}renderer.xr.setFoveation&&renderer.xr.setFoveation(1);
     camera.position.set(0,0,0);$('menu').classList.add('hide');
     s.addEventListener('end',()=>{state='menu';$('menu').classList.remove('hide');renderer.setClearColor(0,1);camera.position.set(0,1.6,0)});
-    beginRun()}catch(e){$('xrnote').textContent='Kunne ikke starte VR: '+e.message}}
+    beginRun()}catch(e){$('xrnote').textContent='Kunne ikke starte VR: '+(e&&e.message||e)}}
 $('bSmooth').onclick=()=>startXR('smooth');
 $('bTele').onclick=()=>startXR('tele');
 $('bPC').onclick=()=>{audio();mode='desktop';isAR=false;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';
-  camera.position.set(0,1.6,0);yaw=0;pitch=0;beginRun();try{renderer.domElement.requestPointerLock()}catch(e){}};
-renderer.domElement.addEventListener('click',()=>{if(mode=='desktop'&&state!='menu')try{renderer.domElement.requestPointerLock()}catch(e){}});
+  camera.position.set(0,1.6,0);yaw=0;pitch=0;beginRun();try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}};
+renderer.domElement.addEventListener('click',()=>{if(mode=='desktop'&&state!='menu')try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}});
 addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement){yaw-=e.movementX*.0025;pitch=Math.max(-1.3,Math.min(1.3,pitch-e.movementY*.0025))}});
 addEventListener('keydown',e=>{keys.add(e.code);if(e.code=='Escape'&&mode=='desktop'&&!renderer.xr.isPresenting){state='menu';$('menu').classList.remove('hide');rc.style.display='none';$('hint').style.display='none';$('cross').style.display='none'}});
 addEventListener('keyup',e=>keys.delete(e.code));
 window.__dbg={goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
 if(navigator.xr){Promise.all([navigator.xr.isSessionSupported('immersive-vr').catch(()=>false),navigator.xr.isSessionSupported('immersive-ar').catch(()=>false)]).then(([vr,ar])=>{
-  const ok=vr||ar;$('bSmooth').disabled=$('bTele').disabled=!ok;
+  const ok=vr||ar;supAR=ar;$('bSmooth').disabled=$('bTele').disabled=!ok;
   $('xrnote').textContent=ok?(ar?'Klar for VR. Du starter i stua med kamera-gjennomsyn.':'Klar for VR.'):'VR er ikke tilgjengelig her. Åpne siden i nettleseren på Meta Quest 3.'})}
 else $('xrnote').textContent='VR er ikke tilgjengelig her. Åpne siden i nettleseren på Meta Quest 3.';
 </script>
