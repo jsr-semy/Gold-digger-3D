@@ -43,7 +43,7 @@ details ul{margin:8px 0 0;padding-left:18px}
       <button id="bResume" hidden>Fortsett</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
-    <p class="note">Versjon 0.8</p>
+    <p class="note">Versjon 0.9</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
@@ -202,7 +202,10 @@ function deform(p){const f=Math.max(0,Math.min(L.F-1,Math.ceil((BASE-p.y)/FLOOR_
       const A=isX?isOpen(f,b-.5,r):isOpen(f,r,b-.5),B=isX?isOpen(f,b+.5,r):isOpen(f,r,b+.5);if(A==B)return 0;return(B?1:-1)*w};
     const px=side(gx,gz,true),pz=side(gz,gx,false),w=Math.max(Math.abs(px),Math.abs(pz));
     dx+=px*t*.55;dz+=pz*t*.55;dy-=w*w*t*.45}
+  for(const v of ladList){if(p.y<floorY(v.bottom)-.3||p.y>floorY(v.top)+WALL_H+.2)continue;const[lx,lz]=ladPos(v),tx=v.sz,tz=v.sx,along=Math.abs((p.x-lx)*tx+(p.z-lz)*tz),depth=(p.x-lx)*v.sx+(p.z-lz)*v.sz;
+    if(depth<-.6||depth>1.2)continue;const w=Math.max(0,Math.min(1,1-(along-.5)/.45));if(!w)continue;dx*=1-w;dz*=1-w;dy*=1-w*.5;dx+=v.sx*.38*w;dz+=v.sz*.38*w}
   p.x+=dx;p.y+=dy;p.z+=dz}
+let ladList=[];
 function gridQuad(P,o,ua,va,su,sv,ru,rv){const b=P.pos.length/3,p=new THREE.Vector3(),un=ua.clone().normalize(),vn_=va.clone().normalize(),hor=Math.abs(vn_.y)<.5;
   for(let j=0;j<=sv;j++)for(let i=0;i<=su;i++){p.copy(o).addScaledVector(ua,i/su).addScaledVector(va,j/sv);deform(p);P.pos.push(p.x,p.y,p.z);
     if(hor)P.uv.push(p.x/CELL,p.z/CELL);else P.uv.push((p.x*un.x+p.z*un.z)/CELL,p.y/CELL)}
@@ -279,7 +282,7 @@ function buildLevel(n,hx,hz){
   disposeGroup(mine);disposeGroup(shaft);lampPool.forEach(l=>l.intensity=0);
   L=genLevel(n);OX=hx;OZ=hz;ladMap.clear();walkways=[];stones.forEach(st=>st.m.parent&&st.m.parent.remove(st.m));stones=[];noises.length=0;floorIdx.clear();holes.clear();ladderMeshes=[];goldItems=[];trolls=[];exitOpen=false;
   L.lad.forEach((arr,f)=>arr.forEach(([x,z,sx,sz])=>{const v={top:f,bottom:f+1,x,z,sx,sz};ladMap.set(f+','+x+','+z,v);ladMap.set((f+1)+','+x+','+z,v)}));
-  mine=new THREE.Group();shaft=new THREE.Group();scene.add(mine,shaft);
+  mine=new THREE.Group();shaft=new THREE.Group();scene.add(mine,shaft);ladList=[...new Set(ladMap.values())];
   obst=[];barrelEnts=[];const barrelSpots=[];const fl=[],posts=[],R={pos:[],uv:[],idx:[]},CE={pos:[],uv:[],idx:[]},crates=[],barrels=[];lanterns=[];cages=[];
   const qF=Q(-Math.PI/2,0,0);const V=(x,y,z)=>new THREE.Vector3(x,y,z),UP=V(0,1,0);
   const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
@@ -396,6 +399,10 @@ const vigTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256
   r.addColorStop(0,'rgba(0,0,0,0)');r.addColorStop(.55,'rgba(0,0,0,0)');r.addColorStop(.85,'rgba(0,0,0,.85)');r.addColorStop(1,'rgba(0,0,0,1)');g.fillStyle=r;g.fillRect(0,0,256,256);return new THREE.CanvasTexture(c)})();
 const vig=new THREE.Mesh(new THREE.PlaneGeometry(.62,.62),new THREE.MeshBasicMaterial({map:vigTex,transparent:true,opacity:0,depthTest:false,depthWrite:false,fog:false}));vig.position.z=-.2;vig.renderOrder=997;camera.add(vig);
 let vigA=0;
+const restDots=(()=>{const pts=[];for(const el of[-.35,-.12,.12,.35])for(let a=0;a<360;a+=15){const az=a*Math.PI/180;pts.push(Math.sin(az)*Math.cos(el)*1.6,1.45+Math.sin(el)*1.6,-Math.cos(az)*Math.cos(el)*1.6)}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  const m=new THREE.Points(g,new THREE.PointsMaterial({color:0xd8f0ff,size:.028,transparent:true,opacity:0,depthTest:false,depthWrite:false,fog:false,sizeAttenuation:true}));m.renderOrder=996;m.frustumCulled=false;return m})();
+body.add(restDots);
 const fadeMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0,side:THREE.BackSide,depthTest:false});
 const fade=new THREE.Mesh(new THREE.SphereGeometry(.25,16,12),fadeMat);fade.renderOrder=998;camera.add(fade);
 const rc=$('radar2d'),rg=rc.getContext('2d');const rtex=new THREE.CanvasTexture(rc);rtex.colorSpace=THREE.SRGBColorSpace;
@@ -458,7 +465,7 @@ function moveBy(dx,dz){if(climbing())return;const h=headWorld();pushBarrels(pf,h
 function climb(dy){const[x,z]=cellOfHead();const la=ladderAt(x,z,pf)||ladderAt(x,z,nearestFloor(rig.position.y));if(!la)return false;
   rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+dy));pf=nearestFloor(rig.position.y);hugLadder(la);return true}
 function hugLadder(la){const h=headWorld(),[tx,tz]=ladHug(la);setHeadXZ(h.x+(tx-h.x)*.15,h.z+(tz-h.z)*.15)}
-const vel={x:0,z:0};let comfortT=0,vignetteOn=true;
+const vel={x:0,z:0};let comfortT=0,vignetteOn=true,strafe=false,restOn=true;
 let climbDir=0,ladderLock=false,ladderHint=false,climbedFrame=false,ropeHint=false,cartHint='';
 function ropeNear(p){for(const r of L.ropes){if(r.f!=pf)continue;const ab=r.B.clone().sub(r.A),t=Math.max(0,Math.min(1,p.clone().sub(r.A).dot(ab)/ab.lengthSq())),q=r.curve.getPoint(t);if(q.distanceTo(p)<.3)return r}return null}
 // skyv fremover ved stigen: klatre ned (fra toppen) eller opp (fra bunnen); bakover snur retningen
@@ -641,7 +648,7 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
   if(state=='pause'){menuInput()}
   if(state=='glide'){updGlide(dt);updTrolls(dt);updHoles(dt)}
   if(mine&&mine.visible)updProps(dt);
-  {const tgtA=vignetteOn&&(state=='play'||state=='glide')&&mode!='desktop'?Math.min(1,comfortT+(state=='glide'?.6:0)):0;vigA+=(tgtA-vigA)*Math.min(1,dt*6);vig.material.opacity=vigA*.95;vig.visible=vigA>.02;comfortT=0}
+  {const tgtA=vignetteOn&&(state=='play'||state=='glide')&&mode!='desktop'?Math.min(1,comfortT+(state=='glide'?.6:0)):0;vigA+=(tgtA-vigA)*Math.min(1,dt*6);vig.material.opacity=vigA*.95;vig.visible=vigA>.02;restDots.material.opacity=restOn?vigA*.75:0;restDots.visible=restOn&&vigA>.02;restDots.position.y=-seatOff*0;comfortT=0}
   if(L&&mine&&mine.visible)updStones(dt);
   if(state=='play'){graceT-=dt;input(dt);updHoles(dt);menuButtons();
     const[cx,cz]=cellOfHead();if(!climbing()){pf=nearestFloor(rig.position.y);const la=ladderAt(cx,cz,pf);if(!la){const ty=restY();rig.position.y+=(ty-rig.position.y)*Math.min(1,dt*10)}}
@@ -699,7 +706,8 @@ function input(dt){
     if(mode=='smooth'){if(Math.abs(ry)>.4){climb(-ry*1.6*dt);climbedFrame=true}}
     else{if(ry<-.6){R_.aim=true;aimTele(R_)}else if(R_.aim&&ry>-.3){R_.aim=false;doTele();ray.visible=marker.visible=false}}}
   if(L_){const[lx,ly]=axes(L_.gp);if(ladderStick(-ly,dt))climbedFrame=true;else if(mode=='smooth'&&Math.hypot(lx,ly)>.15){const[hx,hz]=cellOfHead(),onRope=isChasm(pf,hx,hz),sp=(onRope?.8:crouching?.9:running?3.1:1.8)*dt;
-      vel.x+=((fwd.x*-ly+right.x*lx)*sp-vel.x)*Math.min(1,dt*8);vel.z+=((fwd.z*-ly+right.z*lx)*sp-vel.z)*Math.min(1,dt*8);moveBy(vel.x,vel.z);comfortT=Math.max(comfortT,Math.min(1,Math.hypot(lx,ly)*(running?1.3:1)))}else{vel.x=vel.z=0;running=false}}
+      const sx_=strafe?lx:0,fy=strafe?-ly:-ly*(Math.abs(ly)>.15?1:0);
+      vel.x+=((fwd.x*fy+right.x*sx_)*sp-vel.x)*Math.min(1,dt*8);vel.z+=((fwd.z*fy+right.z*sx_)*sp-vel.z)*Math.min(1,dt*8);moveBy(vel.x,vel.z);comfortT=Math.max(comfortT,Math.min(1,Math.hypot(lx,ly)*(running?1.3:1)))}else{vel.x=vel.z=0;running=false}}
   for(const o of ctrls){if(!o.gp)continue;const c3=hit(o,3);if(c3||(o.hand=='left'&&hit(o,0))){if(!tryRide()&&c3&&o.hand=='left'&&mode=='smooth'){running=!running;say(running?'Løper':'Går',700)}}}
   // stein: grip lavt ved gulvet for å plukke opp, kast ved å slippe
   for(const o of ctrls){if(!o.gp)continue;const hp=o.g.getWorldPosition(new THREE.Vector3()),now=performance.now()/1000;o.hist=(o.hist||[]);o.hist.push([hp.clone(),now]);if(o.hist.length>6)o.hist.shift();
@@ -718,12 +726,12 @@ const mc=document.createElement('canvas');mc.width=1024;mc.height=1024;const mg=
 const menuPanel=new THREE.Mesh(new THREE.PlaneGeometry(.8,.8),new THREE.MeshBasicMaterial({map:mtex,transparent:true,depthTest:false,fog:false}));menuPanel.renderOrder=1000;menuPanel.visible=false;scene.add(menuPanel);
 const MENU=()=>[['Fortsett',()=>closeMenu()],['Start nivået på nytt',()=>{closeMenu();restartLevel()}],
   [`Bevegelse: ${mode=='tele'?'teleport':'styrespak'}`,()=>{mode=mode=='tele'?'smooth':'tele';drawMenu()}],
-  [`Sving: ${snapTurn?'i hakk':'myk'}`,()=>{snapTurn=!snapTurn;drawMenu()}],[`Komfort-vignett: ${vignetteOn?'på':'av'}`,()=>{vignetteOn=!vignetteOn;drawMenu()}],[`Spiller sittende: ${seatOff?'ja':'nei'}`,()=>{seatOff=seatOff?0:.45;body.position.y=seatOff;drawMenu()}],['Avslutt spillet',()=>{const s=renderer.xr.getSession();if(s)s.end()}]];
+  [`Sving: ${snapTurn?'i hakk':'myk'}`,()=>{snapTurn=!snapTurn;drawMenu()}],[`Komfort-vignett: ${vignetteOn?'på':'av'}`,()=>{vignetteOn=!vignetteOn;drawMenu()}],[`Ro-prikker: ${restOn?'på':'av'}`,()=>{restOn=!restOn;drawMenu()}],[`Sidesteg med spaken: ${strafe?'på':'av'}`,()=>{strafe=!strafe;drawMenu()}],[`Spiller sittende: ${seatOff?'ja':'nei'}`,()=>{seatOff=seatOff?0:.45;body.position.y=seatOff;drawMenu()}],['Avslutt spillet',()=>{const s=renderer.xr.getSession();if(s)s.end()}]];
 function drawMenu(){mg.clearRect(0,0,1024,1024);mg.fillStyle='rgba(18,12,9,.92)';mg.beginPath();mg.roundRect(8,8,1008,1008,40);mg.fill();mg.strokeStyle='#f6c64a';mg.lineWidth=5;mg.stroke();
   mg.textAlign='center';mg.fillStyle='#f6c64a';mg.font='bold 72px system-ui,sans-serif';mg.fillText('Pause',512,120);
   mg.fillStyle='#f3e6d0';mg.font='34px system-ui,sans-serif';mg.fillText(`Nivå ${level+1} · Gull ${goldGot}/${goldTotal} · Liv ${lives}`,512,180);
-  MENU().forEach(([t],i)=>{const y=220+i*112;mg.fillStyle=i==menuSel?'#f6c64a':'#3a2a20';mg.beginPath();mg.roundRect(110,y,804,96,22);mg.fill();
-    mg.fillStyle=i==menuSel?'#2a1c14':'#f3e6d0';mg.font='bold 46px system-ui,sans-serif';mg.fillText(t,512,y+64)});mtex.needsUpdate=true}
+  MENU().forEach(([t],i)=>{const y=200+i*86;mg.fillStyle=i==menuSel?'#f6c64a':'#3a2a20';mg.beginPath();mg.roundRect(110,y,804,74,18);mg.fill();
+    mg.fillStyle=i==menuSel?'#2a1c14':'#f3e6d0';mg.font='bold 38px system-ui,sans-serif';mg.fillText(t,512,y+51)});mtex.needsUpdate=true}
 function openMenu(){if(state!='play'&&state!='hurt')return;pausedFrom=state;state='pause';menuSel=-1;
   const h=headWorld(),dir=camera.getWorldDirection(new THREE.Vector3());dir.y=0;dir.normalize();menuPanel.position.set(h.x+dir.x*1.1,h.y-.1,h.z+dir.z*1.1);
   menuPanel.lookAt(h.x,h.y-.1,h.z);drawMenu();menuPanel.visible=true;digMark.visible=marker.visible=false}
@@ -732,7 +740,7 @@ function menuButtons(){for(const o of ctrls)if(o.gp&&(hit(o,4)&&o.hand=='left'||
 function menuInput(){if(mode=='desktop')return;let sel=-1,click=false;
   for(const o of ctrls){if(!o.gp)continue;if(hit(o,5)||(o.hand=='left'&&hit(o,4))){closeMenu();return}
     const p=o.c.getWorldPosition(new THREE.Vector3()),q=o.c.getWorldQuaternion(new THREE.Quaternion());raycaster.set(p,new THREE.Vector3(0,0,-1).applyQuaternion(q));raycaster.far=5;
-    const hs=raycaster.intersectObject(menuPanel);if(hs[0]&&o.hand=='right'||hs[0]&&sel<0){const uv=hs[0].uv,py=(1-uv.y)*1024,i=Math.floor((py-220)/112);if(i>=0&&i<MENU().length&&(py-220)%112<96&&uv.x>.12&&uv.x<.88)sel=i;
+    const hs=raycaster.intersectObject(menuPanel);if(hs[0]&&o.hand=='right'||hs[0]&&sel<0){const uv=hs[0].uv,py=(1-uv.y)*1024,i=Math.floor((py-200)/86);if(i>=0&&i<MENU().length&&(py-200)%86<74&&uv.x>.12&&uv.x<.88)sel=i;
       if(o.hand=='right'||!ctrls.some(c=>c.hand=='right'&&c.gp)){ray.visible=true;ray.geometry.setFromPoints([p,hs[0].point]);ray.material.color.set(0xf6c64a)}}
     if(hit(o,0)&&sel>=0)click=true}
   if(sel!=menuSel){menuSel=sel;drawMenu()}if(click){const a=MENU()[sel];a&&a[1]()}}
