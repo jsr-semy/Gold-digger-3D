@@ -32,7 +32,7 @@ details ul{margin:8px 0 0;padding-left:18px}
 <canvas id="gl"></canvas>
 <canvas id="radar2d" width="256" height="256"></canvas>
 <div id="cross"></div>
-<div id="hint">Klikk for å styre med musa · WASD gå · Mellomrom/C klatre · F grav · Esc pause</div>
+<div id="hint">Klikk for å styre med musa · WASD gå · Mellomrom/C klatre · F grav · E tralle · Esc pause</div>
 <div id="menu">
   <div class="card">
     <h1>Gullgraveren: Dypet</h1>
@@ -43,13 +43,15 @@ details ul{margin:8px 0 0;padding-left:18px}
       <button id="bResume" hidden>Fortsett</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
-    <p class="note">Versjon 0.5</p>
+    <p class="note">Versjon 0.6</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
       <ul>
         <li><b>Styrespak-modus:</b> venstre spak går, høyre spak sidelengs snur mykt, høyre spak opp/ned klatrer i stiger.</li>
         <li><b>Grav:</b> pek hakka (høyre hånd) på gulvruta ved siden av deg og trykk avtrekkeren. Trollet faller i hullet og blir sittende fast en stund, og du kan gå over det.</li>
+        <li><b>Tau over kløfter:</b> gå frem (styrespak) eller sikt over kløften (teleport), så henger du deg over. Du kan også holde grepknappen på tauet og dra deg hånd over hånd.</li>
+        <li><b>Gruvetralle:</b> stå i tralla og trykk A på høyre kontroll. Troll på skinnene blir dyttet bort.</li>
         <li><b>Meny/pause:</b> trykk Y eller X på venstre kontroll, eller B på høyre.</li>
         <li><b>Teleport-modus:</b> skyv høyre spak fremover, sikt på gulvet og slipp. Du kan hoppe opptil 4 ruter rett frem, men ikke forbi troll.</li>
         <li><b>Klatring:</b> stå ved stigen, hold inne grepknappen og trekk deg opp eller ned, hånd over hånd.</li>
@@ -123,6 +125,7 @@ const MAT={
   rust:new THREE.MeshStandardMaterial({color:0x6e3a22,metalness:.6,roughness:.75}),
   ore:new THREE.MeshStandardMaterial({color:0x3a3430,roughness:.9}),
   flame:new THREE.MeshBasicMaterial({color:0xffc070}),
+  rope:new THREE.MeshStandardMaterial({color:0x8a6a42,roughness:1}),
   canary:new THREE.MeshStandardMaterial({color:0xffd21a,roughness:.7}),
   beak:new THREE.MeshStandardMaterial({color:0xff8a20,roughness:.6}),
   wood:new THREE.MeshStandardMaterial({map:woodTex(),roughness:.9}),
@@ -160,16 +163,25 @@ function genLevel(n){
       lad[f].push([x,z]);used.add(key(f,x,z));used.add(key(f+1,x,z))}}
   let start;do start=pick(odd);while(used.has(key(0,...start)));
   let exit,best=-1;for(let t=0;t<30;t++){const c=pick(odd);if(used.has(key(F-1,...c)))continue;const d=Math.abs(c[0]-start[0])+Math.abs(c[1]-start[1])+r()*2;if(d>best){best=d;exit=c}}
+  const chasm=new Set(),ropes=[],NC=n<1?0:Math.min(1+Math.floor(n/3),3);
+  const op=(f,a,b)=>a>=0&&b>=0&&a<W&&b<W&&g[f][b*W+a]!='#';
+  const corr=(f,x,z,dx)=>op(f,x,z)&&(dx?op(f,x-1,z)&&op(f,x+1,z)&&!op(f,x,z-1)&&!op(f,x,z+1):op(f,x,z-1)&&op(f,x,z+1)&&!op(f,x-1,z)&&!op(f,x+1,z));
+  for(let t=0;t<400&&ropes.length<NC;t++){const f=Math.floor(r()*F),x=1+Math.floor(r()*(W-2)),z=1+Math.floor(r()*(W-2)),dx=r()<.5;
+    if(!corr(f,x,z,dx))continue;const len=corr(f,x+(dx?1:0),z+(dx?0:1),dx)&&r()<.6?2:1,cells=[];for(let i=0;i<len;i++)cells.push([x+(dx?i:0),z+(dx?0:i)]);
+    const A=[x-(dx?1:0),z-(dx?0:1)],B=[cells[len-1][0]+(dx?1:0),cells[len-1][1]+(dx?0:1)];
+    const bad=c=>used.has(key(f,...c))||chasm.has(key(f,...c))||(f==0&&c[0]==start[0]&&c[1]==start[1])||(f==F-1&&c[0]==exit[0]&&c[1]==exit[1]);
+    if(cells.some(c=>bad(c)||(f<F-1&&g[f+1][c[1]*W+c[0]]!='#')||[[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>chasm.has(key(f,c[0]+a,c[1]+b))))||bad(A)||bad(B))continue;
+    cells.forEach(c=>chasm.add(key(f,...c)));ropes.push({f,a:A,b:B,dx,cells})}
   const free=[];for(let f=0;f<F;f++)for(let z=1;z<W-1;z++)for(let x=1;x<W-1;x++){
     if(g[f][z*W+x]!='.'||used.has(key(f,x,z)))continue;if(f==0&&x==start[0]&&z==start[1])continue;if(f==F-1&&x==exit[0]&&z==exit[1])continue;free.push([f,x,z])}
   const G=Math.min(4+n,12),gold=[],taken=new Set();
   for(let f=0;f<F&&gold.length<G;f++){const c=free.filter(p=>p[0]==f&&!taken.has(p.join()));if(c.length){const p=pick(c);gold.push(p);taken.add(p.join())}}
   while(gold.length<G){const p=pick(free);if(!taken.has(p.join())){gold.push(p);taken.add(p.join())}}
   const T=Math.min(1+Math.floor(n*.7),5),trolls=[];let tries=0;
-  while(trolls.length<T&&tries++<500){const p=pick(free);if(taken.has(p.join()))continue;
+  while(trolls.length<T&&tries++<500){const p=pick(free);if(taken.has(p.join())||chasm.has(key(...p)))continue;
     const far=p[0]>0||Math.abs(p[1]-start[0])+Math.abs(p[2]-start[1])>=8;if(!far)continue;
     if(trolls.some(q=>q[0]==p[0]&&Math.abs(q[1]-p[1])+Math.abs(q[2]-p[2])<4))continue;trolls.push(p);taken.add(p.join())}
-  return{n,W,F,g,lad,start,exit,gold,trolls}}
+  return{n,W,F,g,lad,start,exit,gold,trolls,chasm,ropes}}
 
 /* ================= støy og bergformer ================= */
 function h3(x,y,z){let h=Math.imul(x|0,374761393)^Math.imul(y|0,668265263)^Math.imul(z|0,1274126177);h=Math.imul(h^(h>>>13),1274126177);return((h^(h>>>16))>>>0)/4294967296}
@@ -217,7 +229,7 @@ function buildCages(){for(const k of cages){const g=new THREE.Group(),pv=new THR
     const tail=new THREE.Mesh(new THREE.ConeGeometry(.018,.05,6),MAT.canary);tail.rotation.x=-Math.PI/2.4;tail.position.set(0,-.005,-.06);bird.add(tail);
     for(const sx of[-1,1]){const e=new THREE.Mesh(new THREE.SphereGeometry(.005,5,4),MAT.iron);e.position.set(sx*.016,.042,.05);bird.add(e)}
     k.g=g;k.pv=pv;k.bird=bird;k.chirp=2+Math.random()*4;mine.add(g)}}
-function buildRails(){const sl=[],rl=[],carts=[];const bad=(f,x,z)=>ladderAt(x,z,f)||(f==0&&x==L.start[0]&&z==L.start[1])||(f==L.F-1&&x==L.exit[0]&&z==L.exit[1]);
+function buildRails(){const sl=[],rl=[],carts=[];rails=[];const bad=(f,x,z)=>isChasm(f,x,z)||ladderAt(x,z,f)||(f==0&&x==L.start[0]&&z==L.start[1])||(f==L.F-1&&x==L.exit[0]&&z==L.exit[1]);
   for(let f=0;f<L.F;f++){let best=null;
     for(const dirX of[true,false])for(let a=0;a<L.W;a++){let run=[];for(let b=0;b<=L.W;b++){const x=dirX?b:a,z=dirX?a:b;
         if(b<L.W&&isOpen(f,x,z)&&!bad(f,x,z))run.push([x,z]);else{if(run.length>=4&&(!best||run.length>best.run.length))best={run:run.slice(),dirX};run=[]}}}
@@ -225,14 +237,15 @@ function buildRails(){const sl=[],rl=[],carts=[];const bad=(f,x,z)=>ladderAt(x,z
     const mx=(ax+bx)/2,mz=(az+bz)/2,q=best.dirX?Q(0,Math.PI/2,0):Q(0,0,0);
     for(let d=-len/2;d<=len/2;d+=.62)sl.push(M([mx+(best.dirX?d:0),y+.03,mz+(best.dirX?0:d)],q,[1,1,1]));
     for(const o of[-.38,.38])rl.push(M([mx+(best.dirX?0:o),y+.09,mz+(best.dirX?o:0)],q,[1,1,len]));
-    carts.push({x:ax+(best.dirX?.2:0),z:az+(best.dirX?0:.2),y,rot:best.dirX?Math.PI/2:0})}
+    carts.push({x:ax,z:az,y,rot:best.dirX?Math.PI/2:0,rail:{f,cells:r,at:0,dirX:best.dirX}})}
   mine.add(instanced(new THREE.BoxGeometry(1.15,.07,.18),MAT.beam,sl),instanced(new THREE.BoxGeometry(.06,.07,1),MAT.steel,rl));
   for(const c of carts){const g=new THREE.Group();g.position.set(c.x,c.y,c.z);g.rotation.y=c.rot;const W=.95,Lc=1.3,Hc=.6;
     const pane=(w,h,x,y,z,ry,rx=0)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,.04),MAT.rust);m.position.set(x,y,z);m.rotation.set(rx,ry,0);g.add(m)};
     pane(W,Hc,0,.55,Lc/2,0);pane(W,Hc,0,.55,-Lc/2,0);pane(Lc,Hc,W/2,.55,0,Math.PI/2);pane(Lc,Hc,-W/2,.55,0,Math.PI/2);pane(W,Lc,0,.27,0,0,Math.PI/2);
     for(const sx of[-.38,.38])for(const sz of[-.4,.4]){const wh=new THREE.Mesh(new THREE.CylinderGeometry(.13,.13,.06,14),MAT.iron);wh.rotation.z=Math.PI/2;wh.position.set(sx,.15,sz);g.add(wh)}
     for(let i=0;i<5;i++){const o=new THREE.Mesh(new THREE.DodecahedronGeometry(.14+h3(i,c.x*9,3)*.08,0),MAT.ore);o.position.set((h3(i,1,c.z*7)-.5)*.6,.85,(h3(i,2,5)-.5)*.9);g.add(o)}
-    mine.add(g)}}
+    c.rail.g=g;rails.push(c.rail);mine.add(g)}}
+let rails=[];
 function updProps(dt){const h=headWorld(),now=performance.now()/1000;
   const near=lanterns.filter(l=>Math.abs(l.y-h.y)<2.5).map(l=>[l,(l.x-h.x)**2+(l.z-h.z)**2]).sort((a,b)=>a[1]-b[1]).slice(0,lampPool.length);
   lampPool.forEach((lt,i)=>{const e=near[i];if(e&&e[1]<200){const l=e[0];lt.position.set(l.x,l.y-.05,l.z);lt.intensity=2.2+Math.sin(now*13+l.ph)*.25+Math.sin(now*7.3+l.ph)*.2}else lt.intensity=0});
@@ -264,12 +277,16 @@ function buildLevel(n,hx,hz){
   for(let f=0;f<L.F;f++){const y=floorY(f);
     for(let z=0;z<L.W;z++)for(let x=0;x<L.W;x++){if(!isOpen(f,x,z))continue;const[wx,wz]=cw(x,z);const la=ladderAt(x,z,f);
       const isExit=f==L.F-1&&x==L.exit[0]&&z==L.exit[1],isStart=f==0&&x==L.start[0]&&z==L.start[1];
-      if(!(la&&la.top==f)&&!isExit){floorIdx.set(f+','+x+','+z,fl.length);fl.push(M([wx,y,wz],qF))}
+      const ch=isChasm(f,x,z);
+      if(!(la&&la.top==f)&&!isExit&&!ch){floorIdx.set(f+','+x+','+z,fl.length);fl.push(M([wx,y,wz],qF))}
       if(!(la&&la.bottom==f)&&!isStart)gridQuad(CE,V(wx-CELL/2,y+WALL_H,wz-CELL/2),V(CELL,0,0),V(0,0,CELL),7,7,1,1);
       for(const[dx,dz]of dirs)if(!isOpen(f,x+dx,z+dz))wallQ(R,wx,y,wz,dx,dz,WALL_H,7);
       if(la&&la.top==f){const y2=floorY(f+1)+WALL_H;for(const[dx,dz]of dirs)wallQ(R,wx,y2,wz,dx,dz,y-y2,4)}
       const ns=isOpen(f,x,z-1)&&isOpen(f,x,z+1)&&!isOpen(f,x-1,z)&&!isOpen(f,x+1,z),ew=isOpen(f,x-1,z)&&isOpen(f,x+1,z)&&!isOpen(f,x,z-1)&&!isOpen(f,x,z+1);
-      const hv=h3(x*7+f,z*13,f*31+5),special=la||isExit||isStart;
+      if(ch){for(const[dx,dz]of dirs)if(!isChasm(f,x+dx,z+dz))wallQ(R,wx,y-3.2,wz,dx,dz,3.2,5);
+        const bt=new THREE.Mesh(new THREE.PlaneGeometry(CELL,CELL),MAT.ore);bt.rotation.x=-Math.PI/2;bt.position.set(wx,y-3.2,wz);mine.add(bt);
+        for(let i=0;i<5;i++){const rk=new THREE.Mesh(new THREE.DodecahedronGeometry(.15+h3(i,x,z)*.25,0),MAT.ore);rk.position.set(wx+(h3(i,z,1)-.5)*1.4,y-3.1,wz+(h3(x,i,2)-.5)*1.4);mine.add(rk)}}
+      const hv=h3(x*7+f,z*13,f*31+5),special=la||isExit||isStart||ch||(L.ropes.some(r=>r.f==f&&((r.a[0]==x&&r.a[1]==z)||(r.b[0]==x&&r.b[1]==z))));
       if((ns||ew)&&!special){
         if((x+z+f)%3==0){const s=CELL/2-.38,ph=WALL_H-.45,rot=ns?0:Math.PI/2,ax=ns?[1,0]:[0,1];
           posts.push(M([wx-ax[0]*s,y+ph/2,wz-ax[1]*s],Q(0,rot,(hv-.5)*.06),[1,ph,1]),M([wx+ax[0]*s,y+ph/2,wz+ax[1]*s],Q(0,rot,(hv-.5)*-.06),[1,ph,1]),
@@ -285,6 +302,11 @@ function buildLevel(n,hx,hz){
   mine.add(floorMesh,meshFrom(R,MAT.wall),meshFrom(CE,MAT.ceil),instanced(new THREE.BoxGeometry(.22,1,.22),MAT.beam,posts),
     instanced(new THREE.BoxGeometry(1,1,1),MAT.crate,crates),instanced(new THREE.CylinderGeometry(.28,.28,.84,12),MAT.barrel,barrels));
   buildRails();buildLanterns();buildCages();
+  for(const r of L.ropes){const y=floorY(r.f)+ROPE_Y,[ax,az]=cw(...r.a),[bx,bz]=cw(...r.b);r.A=new THREE.Vector3(ax,y,az);r.B=new THREE.Vector3(bx,y,bz);
+    const mid=r.A.clone().lerp(r.B,.5);mid.y-=.18;const cv=new THREE.QuadraticBezierCurve3(r.A,mid,r.B);r.curve=cv;
+    mine.add(new THREE.Mesh(new THREE.TubeGeometry(cv,40,.025,6,false),MAT.rope));
+    for(const e of[r.A,r.B]){const ring=new THREE.Mesh(new THREE.TorusGeometry(.06,.015,6,14),MAT.iron);ring.position.copy(e);ring.rotation.y=r.dx?Math.PI/2:0;mine.add(ring);
+      const bolt=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,.45,6),MAT.iron);bolt.position.set(e.x,e.y+.25,e.z);mine.add(bolt)}}
   // stiger
   const railG=new THREE.BoxGeometry(.06,1,.06),rungG=new THREE.BoxGeometry(.56,.045,.045);
   for(const v of new Set(ladMap.values())){const[wx,wz]=cw(v.x,v.z),y0=floorY(v.bottom),y1=floorY(v.top)+1.1,len=y1-y0;
@@ -298,7 +320,8 @@ function buildLevel(n,hx,hz){
   for(const[f,x,z]of L.gold){const[wx,wz]=cw(x,z);const m=new THREE.Group();
     for(let i=0;i<3;i++){const n=new THREE.Mesh(gGeo,MAT.gold);n.position.set((i-1)*.16,i==1?.1:0,(i%2)*.1);n.rotation.set(i,i*2,0);n.scale.setScalar(i==1?1.1:.8);m.add(n)}
     const sp=new THREE.Sprite(glowMat);sp.scale.setScalar(.9);m.add(sp);
-    m.position.set(wx,floorY(f)+.25,wz);m.userData={f,x,z,ph:Math.random()*6};mine.add(m);goldItems.push(m)}
+    const hy=isChasm(f,x,z)?1.55:.25;if(hy>1){const cord=new THREE.Mesh(new THREE.CylinderGeometry(.006,.006,.45,4),MAT.rope);cord.position.y=.3;m.add(cord)}
+    m.position.set(wx,floorY(f)+hy,wz);m.userData={f,x,z,ph:Math.random()*6,hy};mine.add(m);goldItems.push(m)}
   // troll
   for(const[f,x,z]of L.trolls){const t=makeTroll();const[wx,wz]=cw(x,z);t.position.set(wx,floorY(f),wz);
     Object.assign(t.userData,{f,x,z,sf:f,sx:x,sz:z,from:null,to:null,p:1,wait:0});mine.add(t);trolls.push(t)}
@@ -381,18 +404,24 @@ function setHeadXZ(x,z){rig.updateMatrixWorld();const h=headWorld();rig.position
 function turn(a){rig.updateMatrixWorld();const h=headWorld();rig.rotation.y+=a;rig.updateMatrixWorld();const h2=headWorld();rig.position.x+=h.x-h2.x;rig.position.z+=h.z-h2.z}
 function cellOfHead(){const h=headWorld();return wc(h.x,h.z)}
 function nearestFloor(y){return Math.max(0,Math.min(L.F-1,Math.round((BASE-y)/FLOOR_H)))}
-function climbing(){return Math.abs(rig.position.y-floorY(nearestFloor(rig.position.y)))>.25}
+function restY(){const nf=nearestFloor(rig.position.y),[x,z]=cellOfHead();return floorY(nf)-(isChasm(nf,x,z)?HANG:0)}
+function climbing(){const nf=nearestFloor(rig.position.y),[x,z]=cellOfHead();if(!ladderAt(x,z,nf))return false;return Math.abs(rig.position.y-floorY(nf))>.25}
+const isChasm=(f,x,z)=>!!(L&&L.chasm.has(f+','+x+','+z));
+const ROPE_Y=2.05,HANG=.55;
+function ropeAt(f,x,z){return L.ropes.find(r=>r.f==f&&r.cells.some(c=>c[0]==x&&c[1]==z))}
 function walkable(f,x,z){if(!isOpen(f,x,z))return false;const h=holes.get(f+','+x+','+z);return!h||!!h.troll}
 function openAt(f,wx,wz){const[x,z]=wc(wx,wz);return isOpen(f,x,z)}
 function walkAt(f,wx,wz){const[x,z]=wc(wx,wz);return walkable(f,x,z)}
 function freeAt(f,wx,wz){for(const[ox,oz]of[[RADIUS,RADIUS],[-RADIUS,RADIUS],[RADIUS,-RADIUS],[-RADIUS,-RADIUS]])if(!walkAt(f,wx+ox,wz+oz))return false;return true}
 function moveBy(dx,dz){if(climbing())return;const h=headWorld();
+  {const[cx,cz]=wc(h.x,h.z),r=ropeAt(pf,cx,cz)||ropeAt(pf,...wc(h.x+dx*4,h.z+dz*4));if(r&&isChasm(pf,...wc(h.x+dx,h.z+dz))||r&&isChasm(pf,cx,cz)){const[ax,az]=cw(...r.a);if(r.dx){dz=(az-h.z)*.2}else{dx=(ax-h.x)*.2}}}
   if(freeAt(pf,h.x+dx,h.z))rig.position.x+=dx;else if(freeAt(pf,h.x+dx*.3,h.z))rig.position.x+=dx*.3;
   headWorld(h);if(freeAt(pf,h.x,h.z+dz))rig.position.z+=dz;else if(freeAt(pf,h.x,h.z+dz*.3))rig.position.z+=dz*.3}
 function climb(dy){const[x,z]=cellOfHead();const la=ladderAt(x,z,pf)||ladderAt(x,z,nearestFloor(rig.position.y));if(!la)return false;
   rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+dy));pf=nearestFloor(rig.position.y);hugLadder(la);return true}
 function hugLadder(la){const h=headWorld(),[ax,az]=cw(la.x,la.z),side=Math.sign(h.z-az)||1;const tx=ax,tz=az+side*.42;setHeadXZ(h.x+(tx-h.x)*.15,h.z+(tz-h.z)*.15)}
-let climbDir=0,ladderLock=false,ladderHint=false;
+let climbDir=0,ladderLock=false,ladderHint=false,climbedFrame=false,ropeHint=false,cartHint='';
+function ropeNear(p){for(const r of L.ropes){if(r.f!=pf)continue;const ab=r.B.clone().sub(r.A),t=Math.max(0,Math.min(1,p.clone().sub(r.A).dot(ab)/ab.lengthSq())),q=r.curve.getPoint(t);if(q.distanceTo(p)<.3)return r}return null}
 // skyv fremover ved stigen: klatre ned (fra toppen) eller opp (fra bunnen); bakover snur retningen
 function ladderStick(fwdAmt,dt){const h=headWorld(),[cx,cz]=wc(h.x,h.z),la=ladderAt(cx,cz,pf)||ladderAt(cx,cz,nearestFloor(rig.position.y));
   if(!la){ladderLock=false;climbDir=0;return false}const[ax,az]=cw(la.x,la.z),d=Math.hypot(h.x-ax,h.z-az);
@@ -482,11 +511,12 @@ function updTrolls(dt){const[px,pz]=cellOfHead(),tgt=[pf,px,pz],sp=.95+level*.11
         const hh=holes.get([u.f,u.x,u.z].join());if(hh&&!hh.troll){hh.troll=t;u.trap=3.8;u.inPit=true;t.position.y=floorY(u.f)-PIT+.08;SND.trap();continue}}
       if(graceT<=0){const n=nextStep(u,tgt);if(n&&!trolls.some(o=>o!==t&&((o.userData.to&&o.userData.to.join()==n.join())||(!o.userData.to&&o.userData.f==n[0]&&o.userData.x==n[1]&&o.userData.z==n[2])))){u.from=[u.f,u.x,u.z];u.to=n;u.p=0}}}
     if(u.to){const vert=u.to[0]!=u.from[0];u.p=Math.min(1,u.p+dt*(vert?.55:sp)/(vert?FLOOR_H:CELL));
-      const[ax,az]=cw(u.from[1],u.from[2]),[bx,bz]=cw(u.to[1],u.to[2]),ay=floorY(u.from[0])-(u.fromPit?PIT-.08:0),by=floorY(u.to[0]);
-      t.position.set(ax+(bx-ax)*u.p,ay+(by-ay)*u.p,az+(bz-az)*u.p);
-      if(!vert&&(bx!=ax||bz!=az))t.rotation.y=Math.atan2(bx-ax,bz-az);
+      const[ax,az]=cw(u.from[1],u.from[2]),[bx,bz]=cw(u.to[1],u.to[2]),ay=floorY(u.from[0])-(u.fromPit?PIT-.08:0)-(isChasm(...u.from)?.8:0),by=floorY(u.to[0])-(isChasm(...u.to)?.8:0);
+      const off=vert?.48*Math.min(1,u.p*5,(1-u.p)*5):0;t.position.set(ax+(bx-ax)*u.p,ay+(by-ay)*u.p,az+(bz-az)*u.p+off);
+      if(vert)t.rotation.y=Math.PI;else if(bx!=ax||bz!=az)t.rotation.y=Math.atan2(bx-ax,bz-az);
+      const hang=vert||isChasm(...u.to)||isChasm(...u.from);u.hang=hang;
       const w=performance.now()/140;t.userData.body.getObjectByName('leg-1').rotation.x=Math.sin(w)*.5;t.userData.body.getObjectByName('leg1').rotation.x=-Math.sin(w)*.5;
-      t.userData.body.getObjectByName('arm-1').rotation.x=-Math.sin(w)*.6;t.userData.body.getObjectByName('arm1').rotation.x=Math.sin(w)*.6;t.userData.body.position.y=Math.abs(Math.sin(w))*.05}
+      if(u.hang){t.userData.body.getObjectByName('arm-1').rotation.x=-2.7+Math.sin(w)*.35;t.userData.body.getObjectByName('arm1').rotation.x=-2.7-Math.sin(w)*.35}else{t.userData.body.getObjectByName('arm-1').rotation.x=-Math.sin(w)*.6;t.userData.body.getObjectByName('arm1').rotation.x=Math.sin(w)*.6}t.userData.body.position.y=Math.abs(Math.sin(w))*.05}
     const dx=t.position.x-h.x,dz=t.position.z-h.z,d=Math.hypot(dx,dz),dy=Math.abs(t.position.y-rig.position.y);
     if(dy<1.6&&!u.inPit&&!u.fromPit){near=Math.min(near,d);if(d<.7&&state=='play'){caught();return}}
     if(dy<1.6&&d<6&&state=='play'&&!u.to){t.lookAt(h.x,t.position.y,h.z)}}
@@ -528,16 +558,19 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
       if(level>=NLEV){surface(true)}else{const h=headWorld();buildLevel(level,h.x,h.z);dropIn(floorY(0)+5);fadeMat.opacity=.8}}}
   else if(state=='hurt'){fadeMat.opacity=Math.min(.7,stT*2);if(stT>1.2){if(lives<=0){totalGold+=goldGot;surface(false)}else respawn()}}
   if(state=='pause'){menuInput()}
+  if(state=='glide'){updGlide(dt);updTrolls(dt);updHoles(dt)}
   if(mine&&mine.visible)updProps(dt);
   if(state=='play'){graceT-=dt;input(dt);updHoles(dt);menuButtons();
-    const[cx,cz]=cellOfHead();if(!climbing()){pf=nearestFloor(rig.position.y);const la=ladderAt(cx,cz,pf);if(!la)rig.position.y=floorY(pf)}
+    const[cx,cz]=cellOfHead();if(!climbing()){pf=nearestFloor(rig.position.y);const la=ladderAt(cx,cz,pf);if(!la){const ty=restY();rig.position.y+=(ty-rig.position.y)*Math.min(1,dt*10)}}
     const h=headWorld();fadeMat.opacity=openAt(pf,h.x,h.z)?0:.92;fadeMat.color.set(0);
     const hands=ctrls.filter(o=>o.gp).map(o=>o.g.getWorldPosition(new THREE.Vector3()));
-    for(const g of goldItems){if(!g.visible)continue;const u=g.userData;g.rotation.y+=dt*1.2;g.position.y=floorY(u.f)+.25+Math.sin(performance.now()/500+u.ph)*.04;
+    for(const g of goldItems){if(!g.visible)continue;const u=g.userData;g.rotation.y+=dt*1.2;g.position.y=floorY(u.f)+(u.hy||.25)+Math.sin(performance.now()/500+u.ph)*.04;
       const byHead=u.f==pf&&u.x==cx&&u.z==cz&&!climbing(),byHand=hands.some(p=>p.distanceTo(g.position)<.35);
       if(byHead||byHand){g.visible=false;goldGot++;SND.gold();if(goldGot>=goldTotal)openExit();else say(`Gull ${goldGot}/${goldTotal}`,1200)}}
     if(exitOpen){exitGroup.getObjectByName('rim').material.opacity=.6+.4*Math.sin(performance.now()/200);
       if(pf==L.F-1&&cx==L.exit[0]&&cz==L.exit[1]&&!climbing())nextLevel()}
+    {const rl=rails.find(r=>r.f==pf&&r.cells[r.at][0]==cx&&r.cells[r.at][1]==cz),k=rl?rl.f+','+cx+','+cz:'';if(k&&k!=cartHint){say('Gruvetralle',2200,mode=='desktop'?'Trykk E for å kjøre':'Trykk A på høyre kontroll for å kjøre');}cartHint=k}
+    if(!ropeHint&&L.ropes.some(r=>r.f==pf&&(r.a[0]==cx&&r.a[1]==cz||r.b[0]==cx&&r.b[1]==cz))){ropeHint=true;say('Kløft med tau',3000,mode=='tele'?'Sikt over kløften og slipp – du henger deg over\neller hold grepknappen på tauet og dra deg bortover':mode=='desktop'?'Gå rett frem for å henge deg over':'Gå frem for å henge deg over\neller hold grepknappen på tauet og dra deg bortover')}
     updTrolls(dt);
     dripT-=dt;if(dripT<0){SND.drip();dripT=2+Math.random()*6}}
   else if(state=='end'){for(const o of ctrls)if(o.gp&&(btn(o.gp,0)||btn(o.gp,4))){if(stT>1.5){panel.visible=false;beginRun()}}
@@ -553,25 +586,33 @@ function input(dt){
       const ax=Math.abs(Math.sin(yaw))>Math.abs(Math.cos(yaw));dig(pf,px+(ax?Math.sign(-Math.sin(yaw)):0),pz+(ax?0:Math.sign(-Math.cos(yaw))))}
     if(!keys.has('KeyF'))keys.delete('_f');let mx=0,mz=0;if(keys.has('KeyW')||keys.has('ArrowUp'))mz-=1;if(keys.has('KeyS')||keys.has('ArrowDown'))mz+=1;if(keys.has('KeyA'))mx-=1;if(keys.has('KeyD'))mx+=1;
     if(keys.has('ArrowLeft'))yaw+=dt*2;if(keys.has('ArrowRight'))yaw-=dt*2;rig.rotation.y=yaw;camera.rotation.set(pitch,0,0);
+    if(keys.has('KeyE')&&!keys.has('_e')){keys.add('_e');tryRide()}if(!keys.has('KeyE'))keys.delete('_e');
     if(ladderStick(-mz,dt)){}else if(mx||mz){const c=Math.cos(yaw),s=Math.sin(yaw),l=Math.hypot(mx,mz);moveBy((mx*c+mz*s)/l*sp,(-mx*s+mz*c)/l*sp)}
     if(keys.has('Space'))climb(1.6*dt);if(keys.has('KeyC')||keys.has('ControlLeft'))climb(-1.6*dt);return}
   const L_=ctrls.find(o=>o.hand=='left'&&o.gp),R_=ctrls.find(o=>o.hand=='right'&&o.gp);
   const fwd=camera.getWorldDirection(tmpV);fwd.y=0;fwd.normalize();const right=tmpV2.set(-fwd.z,0,fwd.x);
-  // klatring med hender
-  let grabbing=false;
+  // klatring med hender (stige) og hånd-over-hånd (tau)
+  let grabbing=false;climbedFrame=false;
   for(const o of ctrls){if(!o.gp)continue;const sq=btn(o.gp,1),ly=o.g.position.y;
     if(sq){const p=o.g.getWorldPosition(new THREE.Vector3());const[x,z]=wc(p.x,p.z);const la=ladderAt(x,z,pf)||ladderAt(x,z,nearestFloor(rig.position.y));
       if(la){const[lx,lz]=cw(la.x,la.z);if(Math.hypot(p.x-lx,p.z-lz)<.75){if(!o.nearLad){o.nearLad=true;try{o.gp.hapticActuators[0].pulse(.25,30)}catch(e){}}if(o.grab){const d=o.lastY-ly;if(Math.abs(d)<.3){const h=headWorld();const[hx,hz]=wc(h.x,h.z);if(hx!=la.x||hz!=la.z)setHeadXZ(lx+(h.x-lx)*.3,lz+(h.z-lz)*.3);
               rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+d));pf=nearestFloor(rig.position.y)}}
-          o.grab=true;grabbing=true}else{o.grab=false;o.nearLad=false}}else o.grab=false}else o.grab=false;o.lastY=ly}
-  if(!grabbing&&climbing()){const top=floorY(nearestFloor(rig.position.y));if(Math.abs(rig.position.y-top)<.6)rig.position.y+=(top-rig.position.y)*Math.min(1,dt*4)}
+          o.grab=true;grabbing=true}else{o.grab=false;o.nearLad=false}}else o.grab=false}else o.grab=false;o.lastY=ly;
+    const rp=sq&&!o.grab&&ropeNear(o.g.getWorldPosition(new THREE.Vector3()));
+    if(rp){if(o.grabR&&o.lastL){const d=o.g.position.clone().sub(o.lastL).applyEuler(rig.rotation),m=-(rp.dx?d.x:d.z);
+        if(Math.abs(m)<.3){const h=headWorld(),nx=h.x+(rp.dx?m:0),nz=h.z+(rp.dx?0:m),[tx,tz]=wc(nx,nz);
+          if(walkable(rp.f,tx,tz)&&(rp.cells.some(c=>c[0]==tx&&c[1]==tz)||(rp.a[0]==tx&&rp.a[1]==tz)||(rp.b[0]==tx&&rp.b[1]==tz)))setHeadXZ(nx,nz)}}
+      if(!o.grabR){try{o.gp.hapticActuators[0].pulse(.3,30)}catch(e){}}o.grabR=true;grabbing=true}else o.grabR=false;
+    o.lastL=(o.lastL||new THREE.Vector3()).copy(o.g.position)}
   if(R_){const[rx,ry]=axes(R_.gp);
     if(!(mode=='tele'&&R_.aim)){if(snapTurn){if(Math.abs(rx)>.7&&!snapLock){turn(-Math.sign(rx)*Math.PI/6);snapLock=true}if(Math.abs(rx)<.3)snapLock=false}
       else if(Math.abs(rx)>.15){const v=(Math.abs(rx)-.15)/.85;turn(-Math.sign(rx)*v*v*2.2*dt)}}
     aimDig(R_);if(hit(R_,0)&&digTarget){dig(...digTarget);swingT=.35;try{R_.gp.hapticActuators&&R_.gp.hapticActuators[0]&&R_.gp.hapticActuators[0].pulse(.8,90)}catch(e){}}
-    if(mode=='smooth'){if(Math.abs(ry)>.4)climb(-ry*1.6*dt)}
+    if(mode=='smooth'){if(Math.abs(ry)>.4){climb(-ry*1.6*dt);climbedFrame=true}}
     else{if(ry<-.6){R_.aim=true;aimTele(R_)}else if(R_.aim&&ry>-.3){R_.aim=false;doTele();ray.visible=marker.visible=false}}}
-  if(L_&&mode=='smooth'){const[lx,ly]=axes(L_.gp);if(!ladderStick(-ly,dt)&&Math.hypot(lx,ly)>.15){const sp=2.2*dt;moveBy((fwd.x*-ly+right.x*lx)*sp,(fwd.z*-ly+right.z*lx)*sp)}}
+  if(L_){const[lx,ly]=axes(L_.gp);if(ladderStick(-ly,dt))climbedFrame=true;else if(mode=='smooth'&&Math.hypot(lx,ly)>.15){const sp=2.2*dt;moveBy((fwd.x*-ly+right.x*lx)*sp,(fwd.z*-ly+right.z*lx)*sp)}}
+  if(R_&&hit(R_,4))tryRide();
+  if(!grabbing&&!climbedFrame&&climbing()){const top=restY();if(Math.abs(rig.position.y-top)<.6)rig.position.y+=(top-rig.position.y)*Math.min(1,dt*4)}
 }
 function hit(o,i){const p=btn(o.gp,i),w=o['p'+i];o['p'+i]=p;return p&&!w}
 function aimDig(o){digTarget=null;digMark.visible=false;if(o.aim||climbing())return;const c=o.c,p=c.getWorldPosition(new THREE.Vector3()),q=c.getWorldQuaternion(new THREE.Quaternion());
@@ -617,7 +658,25 @@ function aimTele(o){const c=o.c;const p=c.getWorldPosition(new THREE.Vector3()),
     if(ok){const[cx,cz]=cw(tx,tz);teleTarget={x:cx,z:cz};marker.position.set(cx,floorY(f)+.02,cz);marker.visible=true;ray.material.color.set(0x7dff9a)}
     else{marker.visible=false;ray.material.color.set(0xff5040)}}
   else{marker.visible=false;ray.material.color.set(0xff5040)}}
-function doTele(){if(!teleTarget)return;fadeMat.opacity=.8;setTimeout(()=>{fadeMat.opacity=0},90);
+let glide=null;
+function startGlide(pts,speed,yFn,cart,onEnd){glide={pts,i:0,speed,v:cart?0:speed,yFn,cart,onEnd};state='glide'}
+function updGlide(dt){const g=glide;if(!g){state='play';return}const h=headWorld();
+  if(g.cart){g.v=Math.min(g.speed,g.v+dt*2.5)}let step=g.v*dt;
+  while(step>0&&g.i<g.pts.length){const[tx,tz]=g.pts[g.i],dx=tx-h.x,dz=tz-h.z,d=Math.hypot(dx,dz);if(d<=step){setHeadXZ(tx,tz);h.x=tx;h.z=tz;step-=d;g.i++}else{setHeadXZ(h.x+dx/d*step,h.z+dz/d*step);step=0}}
+  const ty=g.yFn();rig.position.y+=(ty-rig.position.y)*Math.min(1,dt*8);
+  if(g.cart){const hh=headWorld();g.cart.g.position.set(hh.x,floorY(g.cart.f),hh.z);
+    for(const t of trolls){const u=t.userData;if(u.inPit)continue;if(Math.abs(t.position.y-floorY(g.cart.f))<1&&Math.hypot(t.position.x-hh.x,t.position.z-hh.z)<1.1){
+      u.f=u.sf;u.x=u.sx;u.z=u.sz;u.from=u.to=null;u.p=1;u.trap=0;const[sx,sz]=cw(u.x,u.z);t.position.set(sx,floorY(u.f),sz);SND.thud();say('Bom! Trollet fikk seg en tur',1500)}}
+    if(Math.random()<dt*8)tone(70+Math.random()*30,50,.08,'sawtooth',.04)}
+  if(g.i>=g.pts.length){glide=null;state='play';g.onEnd&&g.onEnd()}}
+function tryRide(){const[cx,cz]=cellOfHead();const rl=rails.find(r=>r.f==pf&&r.cells[r.at][0]==cx&&r.cells[r.at][1]==cz);if(!rl||climbing())return false;
+  const seq=rl.at==0?rl.cells:rl.cells.slice().reverse(),pts=seq.map(c=>cw(...c));const y=floorY(rl.f)+.35;
+  startGlide(pts,4.2,()=>y,{g:rl.g,f:rl.f},()=>{rl.at=rl.at==0?rl.cells.length-1:0;const e=cw(...rl.cells[rl.at]);rl.g.position.set(e[0],floorY(rl.f),e[1])});SND.thud();return true}
+function doTele(){if(!teleTarget)return;
+  if(teleTarget.x!==undefined){const[px,pz]=cellOfHead(),[tx,tz]=wc(teleTarget.x,teleTarget.z),n=Math.abs(tx-px)+Math.abs(tz-pz),sx=Math.sign(tx-px),sz=Math.sign(tz-pz);
+    let crosses=false;const pts=[];for(let i=1;i<=n;i++){const c=[px+sx*i,pz+sz*i];if(isChasm(pf,...c))crosses=true;pts.push(cw(...c))}
+    if(crosses){teleTarget=null;startGlide(pts,1.7,()=>restY(),null);return}}
+  fadeMat.opacity=.8;setTimeout(()=>{fadeMat.opacity=0},90);fadeMat.opacity=.8;setTimeout(()=>{fadeMat.opacity=0},90);
   if(teleTarget.lad){const la=teleTarget.lad,[lx,lz]=cw(la.x,la.z),toF=pf==la.top?la.bottom:la.top;rig.position.y=floorY(toF);pf=toF;setHeadXZ(lx,lz)}
   else setHeadXZ(teleTarget.x,teleTarget.z);teleTarget=null}
 
@@ -640,7 +699,7 @@ renderer.domElement.addEventListener('click',()=>{if(mode=='desktop'&&state!='me
 addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement){yaw-=e.movementX*.0025;pitch=Math.max(-1.3,Math.min(1.3,pitch-e.movementY*.0025))}});
 addEventListener('keydown',e=>{keys.add(e.code);if(e.code=='Escape'&&mode=='desktop'&&!renderer.xr.isPresenting){if(state=='play'){pausedFrom='play';$('bResume').hidden=false}state='pause';$('menu').classList.remove('hide');rc.style.display='none';$('hint').style.display='none';$('cross').style.display='none'}});
 addEventListener('keyup',e=>keys.delete(e.code));
-window.__dbg={setLevel(n){level=n;restartLevel()},get lanterns(){return lanterns.map(l=>[l.f,l.x,l.z])},get cages(){return cages.map(l=>[l.f,l.x,l.z])},wc:(x,z)=>wc(x,z),dig,get holes(){return holes},openMenu,goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
+window.__dbg={cellOfHead,get rails(){return rails.map(r=>({f:r.f,cells:r.cells,at:r.at}))},get ropes(){return L.ropes},tryRide,get pf(){return pf},setLevel(n){level=n;restartLevel()},get lanterns(){return lanterns.map(l=>[l.f,l.x,l.z])},get cages(){return cages.map(l=>[l.f,l.x,l.z])},wc:(x,z)=>wc(x,z),dig,get holes(){return holes},openMenu,goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
 if(navigator.xr){Promise.all([navigator.xr.isSessionSupported('immersive-vr').catch(()=>false),navigator.xr.isSessionSupported('immersive-ar').catch(()=>false)]).then(([vr,ar])=>{
   const ok=vr||ar;supAR=ar;$('bSmooth').disabled=$('bTele').disabled=!ok;
   $('xrnote').textContent=ok?(ar?'Klar for VR. Du starter i stua med kamera-gjennomsyn.':'Klar for VR.'):'VR er ikke tilgjengelig her. Åpne siden i nettleseren på Meta Quest 3.'})}
