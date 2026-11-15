@@ -43,7 +43,7 @@ details ul{margin:8px 0 0;padding-left:18px}
       <button id="bResume" hidden>Fortsett</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
-    <p class="note">Versjon 0.9</p>
+    <p class="note">Versjon 0.10</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
@@ -51,7 +51,8 @@ details ul{margin:8px 0 0;padding-left:18px}
         <li><b>Styrespak-modus:</b> venstre spak går, høyre spak sidelengs snur mykt, høyre spak opp/ned klatrer i stiger.</li>
         <li><b>Grav:</b> pek hakka (høyre hånd) på gulvruta ved siden av deg og trykk avtrekkeren. Trollet faller i hullet og blir sittende fast en stund, og du kan gå over det.</li>
         <li><b>Trollene hører og ser deg:</b> gåing høres et stykke unna, løping langt. Huk deg ned for å snike stille og bli vanskelig å se. Et troll med ! har sett deg, med ? har det hørt noe.</li>
-        <li><b>Løpe:</b> klikk ned venstre styrespak (styrespak-modus).</li>
+        <li><b>Løpe:</b> klikk ned venstre styrespak (styrespak-modus). Bildet får en kaldere tone mens du løper.</li>
+        <li><b>Snike:</b> huk deg ned (ca. 30 cm), eller klikk ned høyre styrespak for å snike av/på. Lykta dempes mens du sniker.</li>
         <li><b>Kast stein:</b> hold grepknappen med hånda nede ved gulvet for å plukke opp en stein, kast og slipp. Trollene går dit steinen lander – også i etasjen under hvis du kaster den ned en sjakt.</li>
         <li><b>Kanarifuglene:</b> kvitrer høyt når du går forbi, og det lokker trollene til seg. Snik forbi dem.</li>
         <li><b>Tau over kløfter:</b> gå frem (styrespak) eller sikt over kløften (teleport), så henger du deg over. Du kan også holde grepknappen på tauet og dra deg hånd over hånd.</li>
@@ -258,7 +259,7 @@ function updProps(dt){const h=headWorld(),now=performance.now()/1000;
   const near=lanterns.filter(l=>Math.abs(l.y-h.y)<2.5).map(l=>[l,(l.x-h.x)**2+(l.z-h.z)**2]).sort((a,b)=>a[1]-b[1]).slice(0,lampPool.length);
   lampPool.forEach((lt,i)=>{const e=near[i];if(e&&e[1]<200){const l=e[0];lt.position.set(l.x,l.y-.05,l.z);lt.intensity=2.2+Math.sin(now*13+l.ph)*.25+Math.sin(now*7.3+l.ph)*.2}else lt.intensity=0});
   for(const k of cages){k.pv.rotation.z=Math.sin(now*.9+k.x)*.06;k.pv.rotation.x=Math.sin(now*.7+k.z)*.05;k.bird.rotation.y=Math.sin(now*.5+k.x)*1.2;k.bird.position.y=-.005+Math.max(0,Math.sin(now*6))*.006;
-    const d=Math.hypot(k.x-h.x,k.z-h.z),same=Math.abs(k.y-h.y)<2.5;k.chirp-=dt;k.alarm=(k.alarm||0)-dt;if(same&&d<4.5&&!crouching&&k.alarm<=0){SND.chirp();setTimeout(SND.chirp,300);setTimeout(SND.chirp,650);makeNoise(nearestFloor(k.y),k.x,k.z,13);k.alarm=8;k.chirp=3;say('Kanarifuglen varsler!',1400)}else if(same&&d<9&&k.chirp<=0){SND.chirp();k.chirp=3+Math.random()*4}}}
+    const d=Math.hypot(k.x-h.x,k.z-h.z),same=Math.abs(k.y-h.y)<2.5;k.chirp-=dt;k.alarm=(k.alarm||0)-dt;if(same&&d<4.5&&!crouching&&k.alarm<=0){const cp=new THREE.Vector3(k.x,k.y-1.2,k.z);SND.chirp(cp,true);setTimeout(()=>SND.chirp(cp,true),350);setTimeout(()=>SND.chirp(cp,true),720);makeNoise(nearestFloor(k.y),k.x,k.z,13);k.alarm=8;k.chirp=3}else if(same&&d<9&&k.chirp<=0){SND.chirp(new THREE.Vector3(k.x,k.y-1.2,k.z));k.chirp=3+Math.random()*4}}}
 /* ================= nivå-tilstand ================= */
 let L=null,OX=0,OZ=0,mine=null,shaft=null,ladderMeshes=[],goldItems=[],trolls=[],exitOpen=false,exitGroup=null,floorMesh=null;
 const ladMap=new Map(),floorIdx=new Map(),holes=new Map();
@@ -413,15 +414,24 @@ const radar=new THREE.Group();
 radar.position.set(0,.035,.11);radar.rotation.x=.55;rtex.generateMipmaps=false;rtex.minFilter=THREE.LinearFilter;
 
 /* ================= lyd ================= */
-let ac=null;
-function audio(){if(!ac){try{ac=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}if(ac&&ac.state=='suspended')ac.resume()}
-function tone(f1,f2,d,type='square',v=.08){if(!ac)return;const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f1,t);o.frequency.exponentialRampToValueAtTime(f2,t+d);
-  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+d+.02)}
-function noise(d,f=800,v=.2){if(!ac)return;const b=ac.createBuffer(1,ac.sampleRate*d,ac.sampleRate),a=b.getChannelData(0);for(let i=0;i<a.length;i++)a[i]=(Math.random()*2-1)*(1-i/a.length);
-  const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=f;g.gain.value=v;s.connect(fl).connect(g).connect(ac.destination);s.start()}
+let ac=null,master=null,ambStarted=false;
+function audio(){if(!ac){try{ac=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+  if(ac&&!master){master=ac.createGain();master.gain.value=1.4;master.connect(ac.destination)}
+  if(ac&&ac.state!='running')ac.resume().catch(()=>{});if(ac&&!ambStarted&&ac.state=='running')startAmb()}
+function outNode(pos){if(!pos)return master;const p=ac.createPanner();p.panningModel='HRTF';p.distanceModel='inverse';p.refDistance=1.6;p.maxDistance=50;p.rolloffFactor=1.1;
+  if(p.positionX){p.positionX.value=pos.x;p.positionY.value=pos.y+1.2;p.positionZ.value=pos.z}else p.setPosition(pos.x,pos.y+1.2,pos.z);p.connect(master);return p}
+function startAmb(){ambStarted=true;try{const len=ac.sampleRate*6,b=ac.createBuffer(1,len,ac.sampleRate),a=b.getChannelData(0);let last=0;for(let i=0;i<len;i++){last=(last+.02*(Math.random()*2-1))/1.02;a[i]=last*3.5}
+  const src=ac.createBufferSource(),lp=ac.createBiquadFilter(),g=ac.createGain();src.buffer=b;src.loop=true;lp.type='lowpass';lp.frequency.value=160;g.gain.value=.35;src.connect(lp).connect(g).connect(master);src.start()}catch(e){}}
+function updListener(){if(!ac||!master)return;const l=ac.listener,h=headWorld(),f=camera.getWorldDirection(new THREE.Vector3()),u=new THREE.Vector3(0,1,0).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+  if(l.positionX){l.positionX.value=h.x;l.positionY.value=h.y;l.positionZ.value=h.z;l.forwardX.value=f.x;l.forwardY.value=f.y;l.forwardZ.value=f.z;l.upX.value=u.x;l.upY.value=u.y;l.upZ.value=u.z}
+  else{l.setPosition(h.x,h.y,h.z);l.setOrientation(f.x,f.y,f.z,u.x,u.y,u.z)}}
+function tone(f1,f2,d,type='square',v=.08,pos=null){if(!ac||!master)return;const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.setValueAtTime(f1,t);o.frequency.exponentialRampToValueAtTime(f2,t+d);
+  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.connect(g).connect(outNode(pos));o.start(t);o.stop(t+d+.02)}
+function noise(d,f=800,v=.2,pos=null){if(!ac||!master)return;const b=ac.createBuffer(1,ac.sampleRate*d,ac.sampleRate),a=b.getChannelData(0);for(let i=0;i<a.length;i++)a[i]=(Math.random()*2-1)*(1-i/a.length);
+  const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=f;g.gain.value=v;s.connect(fl).connect(g).connect(outNode(pos));s.start()}
 const SND={gold:()=>{tone(880,1760,.12);setTimeout(()=>tone(1320,2640,.15),70)},hurt:()=>{tone(300,60,.6,'sawtooth',.12);noise(.4,500,.2)},
   open:()=>{tone(392,1568,.5);setTimeout(()=>tone(523,2093,.6,'triangle'),200)},fall:()=>noise(1.6,1400,.25),rumble:()=>noise(2.5,180,.5),
-  drip:()=>tone(1800+Math.random()*900,600,.12,'sine',.05),roar:()=>{tone(140,60,.8,'sawtooth',.14);noise(.7,400,.25)},grunt:()=>{tone(110,90,.25,'sawtooth',.07)},clack:(v=.3)=>{tone(1400,700,.05,'square',v*.2);noise(.06,3000,v*.5)},step:(r)=>noise(.05,r?500:300,r?.12:.05),smash:()=>{noise(.5,1800,.35);tone(300,80,.3,'triangle',.1)},knock:()=>{noise(.12,600,.3)},chirp:()=>{const b=2600+Math.random()*900;[0,90,170,260].forEach((d,i)=>setTimeout(()=>tone(b+(i%2)*500,b*1.3,.07,'sine',.035),d))},dig:()=>{noise(.35,900,.35);tone(160,70,.2,'triangle',.12)},clank:()=>tone(1200,900,.08,'square',.05),trap:()=>{tone(220,110,.4,'sawtooth',.08)},thud:()=>noise(.6,150,.5),growl:()=>tone(90,55,.5,'sawtooth',.05)};
+  drip:(p)=>tone(1800+Math.random()*900,600,.12,'sine',.07,p),roar:(p)=>{tone(140,60,.8,'sawtooth',.2,p);tone(95,50,.9,'sawtooth',.15,p);noise(.7,400,.35,p)},grunt:(p)=>{tone(110,90,.3,'sawtooth',.12,p);noise(.2,300,.15,p)},clack:(v=.3,p=null)=>{tone(1400,700,.05,'square',.08,p);noise(.08,3000,.4,p)},tstep:(p)=>{noise(.12,140,.6,p)},step:(r)=>noise(.05,r?500:300,r?.12:.05),smash:(p)=>{noise(.5,1800,.5,p);tone(300,80,.3,'triangle',.15,p)},knock:(p)=>{noise(.12,600,.45,p)},chirp:(p,loud)=>{const b=2600+Math.random()*900;[0,90,170,260,350,430].slice(0,loud?6:4).forEach((d,i)=>setTimeout(()=>tone(b+(i%2)*500,b*1.3,.07,'sine',loud?.12:.06,p),d))},dig:()=>{noise(.35,900,.35);tone(160,70,.2,'triangle',.12)},clank:()=>tone(1200,900,.08,'square',.05),trap:()=>{tone(220,110,.4,'sawtooth',.08)},thud:()=>noise(.6,150,.5),growl:(p)=>{tone(90,55,.6,'sawtooth',.12,p);noise(.5,250,.15,p)}};
 
 /* ================= spiller-tilstand ================= */
 let state='menu',mode='desktop',isAR=false,level=0,lives=5,goldGot=0,goldTotal=0,totalGold=0,stT=0,pf=0,graceT=0,growlT=0,dripT=3;
@@ -454,7 +464,7 @@ function barrelInCell(f,x,z){return barrelEnts.find(b=>!b.dead&&b.f==f&&(([bx,bz
 function pushBarrels(f,hx,hz,dx,dz){// spilleren dytter tønner foran seg
   for(const b of barrelEnts){if(b.dead||b.f!=f)continue;const p=b.g.position,d=Math.hypot(p.x-(hx+dx),p.z-(hz+dz));if(d<.3+RADIUS*.85){
     const nx=p.x+dx*1.05,nz=p.z+dz*1.05;if(freeAt(f,nx,nz,.3,b)&&!trolls.some(t=>Math.hypot(t.position.x-nx,t.position.z-nz)<.5)){p.x=nx;p.z=nz;b.g.rotation.y+=Math.hypot(dx,dz)*2}}}}
-function smashBarrel(b){b.dead=true;SND.smash();const p=b.g.position.clone();disposeGroup(b.g);
+function smashBarrel(b){b.dead=true;SND.smash(b.g.position);const p=b.g.position.clone();disposeGroup(b.g);
   for(let i=0;i<7;i++){const s=new THREE.Mesh(new THREE.BoxGeometry(.08,.5,.04),MAT.barrel);s.position.set(p.x+(Math.random()-.5)*.8,p.y+.03,p.z+(Math.random()-.5)*.8);s.rotation.set(Math.PI/2,Math.random()*6,0);mine.add(s)}}
 function moveBy(dx,dz){if(climbing())return;const h=headWorld();pushBarrels(pf,h.x,h.z,dx,dz);
   {const[cx,cz]=wc(h.x,h.z),r=ropeAt(pf,cx,cz)||ropeAt(pf,...wc(h.x+dx*4,h.z+dz*4));if(r&&isChasm(pf,...wc(h.x+dx,h.z+dz))||r&&isChasm(pf,cx,cz)){const[ax,az]=cw(...r.a);if(r.dx){dz=(az-h.z)*.2}else{dx=(ax-h.x)*.2}}}
@@ -540,7 +550,7 @@ function updHoles(dt){for(const[k,h]of holes){h.t+=dt;const[wx,wz]=cw(h.x,h.z),y
       if(h.troll){const u=h.troll.userData;u.trap=0;u.inPit=false;u.f=u.sf;u.x=u.sx;u.z=u.sz;u.from=u.to=null;u.p=1;const[sx,sz]=cw(u.x,u.z);h.troll.position.set(sx,floorY(u.f),sz);SND.thud();say('Trollet ble begravd!',1500)}
       const[px,pz]=cellOfHead();if(h.f==pf&&h.x==px&&h.z==pz)caught()}}}
 /* ================= sanser: lyd, syn, snik ================= */
-const noises=[];let stepAcc=0,running=false,crouching=false,standH=1.55,stanceTxt='';
+const noises=[];let crouchLock=false,runHold=0;let stepAcc=0,running=false,crouching=false,standH=1.55,stanceTxt='';
 function makeNoise(f,wx,wz,r){if(r<=0||!L)return;const[x,z]=wc(wx,wz);noises.push({f,x,z,wx,wz,r,t:performance.now(),used:new Set()})}
 function canSee(t){const u=t.userData,h=headWorld();if(Math.abs(t.position.y-rig.position.y)>1.6)return false;const d=Math.hypot(t.position.x-h.x,t.position.z-h.z);if(d>(crouching?3:9.5))return false;
   const ax=(t.position.x-OX)/CELL+L.start[0],az=(t.position.z-OZ)/CELL+L.start[1],bx=(h.x-OX)/CELL+L.start[0],bz=(h.z-OZ)/CELL+L.start[1],n=Math.ceil(Math.hypot(bx-ax,bz-az)*3);
@@ -548,7 +558,7 @@ function canSee(t){const u=t.userData,h=headWorld();if(Math.abs(t.position.y-rig
 const markTex=(ch,col)=>{const c=document.createElement('canvas');c.width=c.height=64;const g=c.getContext('2d');g.font='bold 56px sans-serif';g.textAlign='center';g.fillStyle='#000';g.fillText(ch,34,56);g.fillStyle=col;g.fillText(ch,32,54);return new THREE.CanvasTexture(c)};
 const markEx=new THREE.SpriteMaterial({map:markTex('!','#ff3020'),depthTest:false,fog:false}),markQ=new THREE.SpriteMaterial({map:markTex('?','#ffb020'),depthTest:false,fog:false});
 function alertFx(t,q){const u=t.userData;if(!u.mark){u.mark=new THREE.Sprite(markEx);u.mark.scale.setScalar(.45);u.mark.position.y=2.15;t.add(u.mark)}u.mark.material=q?markQ:markEx;u.mark.visible=true;u.markT=1.6;
-  u.eyeMat.color.set(q?0xffa020:0xff2a10);const d=Math.hypot(t.position.x-headWorld().x,t.position.z-headWorld().z);if(d<16){q?SND.grunt():SND.roar()}}
+  u.eyeMat.color.set(q?0xffa020:0xff2a10);const d=Math.hypot(t.position.x-headWorld().x,t.position.z-headWorld().z);if(d<25){q?SND.grunt(t.position):SND.roar(t.position)}}
 function randGoal(u){for(let i=0;i<25;i++){const f=Math.random()<.75?u.f:Math.max(0,Math.min(L.F-1,u.f+(Math.random()<.5?-1:1))),x=1+Math.floor(Math.random()*(L.W-2)),z=1+Math.floor(Math.random()*(L.W-2));
     if(isOpen(f,x,z)&&!isChasm(f,x,z)&&(f!=u.f||Math.abs(x-u.x)+Math.abs(z-u.z)>2))return[f,x,z]}return[u.f,u.x,u.z]}
 function perceive(t,dt){const u=t.userData,now=performance.now();if(u.markT>0){u.markT-=dt;if(u.markT<=0&&u.mark)u.mark.visible=false}
@@ -559,8 +569,12 @@ function perceive(t,dt){const u=t.userData,now=performance.now();if(u.markT>0){u
     if(dist<e.r){e.used.add(t);if(u.mode!='chase'){if(u.mode!='inv'||!u.goal||u.goal.join()!=[e.f,e.x,e.z].join())alertFx(t,true);u.mode='inv';u.goal=[e.f,e.x,e.z];u.waitT=0}else if(now-u.lastSeen>1800)u.goal=[e.f,e.x,e.z]}}}
 function updStance(dt){const hy=camera.position.y+seatOff;
   if(mode=='desktop'){crouching=keys.has('KeyZ');camera.position.y+=((crouching?1.0:1.6)-camera.position.y)*Math.min(1,dt*10);running=keys.has('ShiftLeft')&&!crouching}
-  else{if(hy>standH)standH=hy;else standH-=dt*.004;crouching=hy<standH*.72}
-  const t=crouching?'Sniker':running?'Løper':'';if(t!=stanceTxt){stanceTxt=t}}
+  else{if(hy>standH)standH=hy;else standH-=dt*.003;crouching=crouchLock||standH-hy>.3}
+  const t=crouching?'Sniker':running?'Løper':'';if(t!=stanceTxt){stanceTxt=t}
+  // fargetone: kaldere ved løping, dempet lykt ved sniking
+  const cool=running&&state=='play'?1:0;tint.k+=(cool-tint.k)*Math.min(1,dt*4);lamp.color.setRGB(1-.18*tint.k,.89-.02*tint.k,.69+.31*tint.k);
+  tintMesh.material.opacity=tint.k*.07;tintMesh.visible=tint.k>.01;lamp.intensity+=((crouching?7:12)-lamp.intensity)*Math.min(1,dt*4)}
+const tint={k:0},tintMesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({color:0x6aa0ff,transparent:true,opacity:0,depthTest:false,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));tintMesh.position.z=-.12;tintMesh.renderOrder=995;camera.add(tintMesh);
 /* ---------- steiner ---------- */
 let stones=[];const stoneGeo=new THREE.DodecahedronGeometry(.05,0);
 function throwStone(p,v){const m=new THREE.Mesh(stoneGeo,MAT.ore);m.position.copy(p);mine.add(m);stones.push({m,v:v.clone(),alive:true});const dead=stones.filter(s=>!s.alive);if(dead.length>14){const s=dead[0];s.m.parent&&s.m.parent.remove(s.m);stones.splice(stones.indexOf(s),1)}}
@@ -568,15 +582,15 @@ function hasFloor(f,wx,wz){const[x,z]=wc(wx,wz);if(!isOpen(f,x,z)||isChasm(f,x,z
   if(exitOpen&&f==L.F-1&&x==L.exit[0]&&z==L.exit[1])return false;return true}
 function updStones(dt){for(const s of stones){if(!s.alive)continue;const p=s.m.position;s.v.y-=9.8*dt;const n=p.clone().addScaledVector(s.v,dt);
     const f=Math.max(0,Math.min(L.F-1,Math.ceil((BASE-n.y)/FLOOR_H-1e-4))),band=n.y>=floorY(f)-.01&&n.y<=floorY(f)+WALL_H;const[cx,cz]=wc(n.x,n.z);
-    if(band&&!isOpen(f,cx,cz)){const[ox,oz]=wc(p.x,p.z);if(ox!=cx)s.v.x*=-.35;if(oz!=cz)s.v.z*=-.35;s.v.y*=.6;SND.clack(.25);continue}
+    if(band&&!isOpen(f,cx,cz)){const[ox,oz]=wc(p.x,p.z);if(ox!=cx)s.v.x*=-.35;if(oz!=cz)s.v.z*=-.35;s.v.y*=.6;SND.clack(.25,n);continue}
     if(band&&n.y>floorY(f)+WALL_H-.25&&s.v.y>0){const la=ladderAt(cx,cz,f);if(!(la&&la.bottom==f)&&!(f==0&&cx==L.start[0]&&cz==L.start[1]))s.v.y=-Math.abs(s.v.y)*.3}
-    if(band&&n.y<floorY(f)+.05&&hasFloor(f,n.x,n.z)){n.y=floorY(f)+.05;s.alive=false;p.copy(n);makeNoise(f,n.x,n.z,10);const d=headWorld().distanceTo(n);SND.clack(Math.max(.05,.5-d*.03));continue}
-    if(isChasm(f,cx,cz)&&n.y<floorY(f)-3.12){n.y=floorY(f)-3.12;s.alive=false;p.copy(n);makeNoise(f,n.x,n.z,13);SND.clack(.3);continue}
+    if(band&&n.y<floorY(f)+.05&&hasFloor(f,n.x,n.z)){n.y=floorY(f)+.05;s.alive=false;p.copy(n);makeNoise(f,n.x,n.z,10);SND.clack(.4,n);continue}
+    if(isChasm(f,cx,cz)&&n.y<floorY(f)-3.12){n.y=floorY(f)-3.12;s.alive=false;p.copy(n);makeNoise(f,n.x,n.z,13);SND.clack(.4,n);continue}
     if(n.y<floorY(L.F-1)-6){s.alive=false}p.copy(n);s.m.rotation.x+=dt*8}}
 /* ================= troll-AI ================= */
 function decide(t,u,dt,tgt){if(u.goal&&u.goal[0]==u.f&&u.goal[1]==u.x&&u.goal[2]==u.z){if(u.mode=='patrol')u.goal=randGoal(u);else{u.waitT=(u.waitT||0)+dt;t.rotation.y+=dt*1.6;
           if(u.waitT>(u.mode=='chase'?1.2:2.8)&&!(u.mode=='chase'&&performance.now()-u.lastSeen<1800)){u.waitT=0;u.mode='patrol';u.eyeMat.color.set(0xffd23a);u.goal=randGoal(u)}return}}
-        const n=nextStep(u,u.goal||tgt);if(!n){u.goal=randGoal(u);return}const bb=n&&barrelInCell(...n);if(bb){u.bashT=(u.bashT||0)+dt;t.lookAt(bb.g.position.x,t.position.y,bb.g.position.z);const w=performance.now()/90;t.userData.body.getObjectByName('arm-1').rotation.x=-1.5+Math.sin(w)*1.2;t.userData.body.getObjectByName('arm1').rotation.x=-1.5-Math.sin(w)*1.2;if(Math.random()<dt*3)SND.knock();if(u.bashT>2.8){u.bashT=0;smashBarrel(bb)}return}u.bashT=0;
+        const n=nextStep(u,u.goal||tgt);if(!n){u.goal=randGoal(u);return}const bb=n&&barrelInCell(...n);if(bb){u.bashT=(u.bashT||0)+dt;t.lookAt(bb.g.position.x,t.position.y,bb.g.position.z);const w=performance.now()/90;t.userData.body.getObjectByName('arm-1').rotation.x=-1.5+Math.sin(w)*1.2;t.userData.body.getObjectByName('arm1').rotation.x=-1.5-Math.sin(w)*1.2;if(Math.random()<dt*3)SND.knock(bb.g.position);if(u.bashT>2.8){u.bashT=0;smashBarrel(bb)}return}u.bashT=0;
         if(n&&!trolls.some(o=>o!==t&&((o.userData.to&&o.userData.to.join()==n.join())||(!o.userData.to&&o.userData.f==n[0]&&o.userData.x==n[1]&&o.userData.z==n[2])))){u.from=[u.f,u.x,u.z];u.to=n;u.p=0}}
 
 function nbrs(f,x,z){const r=[];for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]])if(isOpen(f,x+dx,z+dz))r.push([f,x+dx,z+dz]);
@@ -585,7 +599,7 @@ function nextStep(u,tgt){const k=a=>a.join(','),s=k([u.f,u.x,u.z]),goal=k(tgt);i
   while(q.length){const c=q.shift(),ck=k(c);if(ck==goal){let n=ck;while(prev.get(n)!==s)n=prev.get(n);return n.split(',').map(Number)}
     for(const nb of nbrs(...c)){const nk=k(nb);if(!prev.has(nk)){prev.set(nk,ck);q.push(nb)}}}return null}
 function updTrolls(dt){const[px,pz]=cellOfHead(),tgt=[pf,px,pz],sp=.95+level*.11;const h=headWorld();
-  let near=99;
+  let near=99,nearT=null;
   const now_=performance.now();for(let i=noises.length-1;i>=0;i--)if(now_-noises[i].t>400)noises.splice(i,1);
   for(const t of trolls){const u=t.userData;perceive(t,dt);
     if(u.trap>0){u.trap-=dt;t.position.x+=Math.sin(performance.now()/40)*.004;
@@ -599,7 +613,7 @@ function updTrolls(dt){const[px,pz]=cellOfHead(),tgt=[pf,px,pz],sp=.95+level*.11
     if(u.to){const vert=u.to[0]!=u.from[0];u.p=Math.min(1,u.p+dt*(vert?.55:sp*(u.mode=='chase'?1:u.mode=='inv'?.8:.55))/(vert?FLOOR_H:CELL));
       const[ax,az]=cw(u.from[1],u.from[2]),[bx,bz]=cw(u.to[1],u.to[2]),ay=floorY(u.from[0])-(u.fromPit?PIT-.08:0)-(isChasm(...u.from)?.8:0),by=floorY(u.to[0])-(isChasm(...u.to)?.8:0);
       let lx_=ax+(bx-ax)*u.p,lz_=az+(bz-az)*u.p;if(vert){const la=ladderAt(u.to[1],u.to[2],u.to[0]);if(la){const[hx2,hz2]=ladHug(la),k=Math.min(1,u.p*5,(1-u.p)*5);lx_+=(hx2-lx_)*k;lz_+=(hz2-lz_)*k;t.rotation.y=Math.atan2(la.sx,la.sz)}}
-      t.position.set(lx_,ay+(by-ay)*u.p,lz_);if(!vert&&(bx!=ax||bz!=az))t.rotation.y=Math.atan2(bx-ax,bz-az);
+      t.position.set(lx_,ay+(by-ay)*u.p,lz_);if(!vert){u.stepA=(u.stepA||0)+dt*sp;if(u.stepA>.6){u.stepA=0;if(t.position.distanceTo(headWorld())<16)SND.tstep(t.position)}}if(!vert&&(bx!=ax||bz!=az))t.rotation.y=Math.atan2(bx-ax,bz-az);
       const hang=vert||isChasm(...u.to)||isChasm(...u.from);u.hang=hang;
       const w=performance.now()/140;t.userData.body.getObjectByName('leg-1').rotation.x=Math.sin(w)*.5;t.userData.body.getObjectByName('leg1').rotation.x=-Math.sin(w)*.5;
       if(u.hang){t.userData.body.getObjectByName('arm-1').rotation.x=-2.7+Math.sin(w)*.35;t.userData.body.getObjectByName('arm1').rotation.x=-2.7-Math.sin(w)*.35}else{t.userData.body.getObjectByName('arm-1').rotation.x=-Math.sin(w)*.6;t.userData.body.getObjectByName('arm1').rotation.x=Math.sin(w)*.6}t.userData.body.position.y=Math.abs(Math.sin(w))*.05}
@@ -607,8 +621,8 @@ function updTrolls(dt){const[px,pz]=cellOfHead(),tgt=[pf,px,pz],sp=.95+level*.11
     if(u.mode=='chase'&&!u.to&&!u.inPit&&dy<1.6&&d<2.4&&d>.5&&graceT<=0){const k=Math.min(1,dt*sp/d);t.position.x-=dx*k;t.position.z-=dz*k}
     if(dy<1.6&&!u.inPit&&!u.fromPit){if(d<.7&&state=='play'){caught();return}}
     if(dy<1.6&&d<6&&state=='play'&&!u.to&&u.mode=='chase'){t.lookAt(h.x,t.position.y,h.z)}
-    if(u.mode=='chase'&&dy<1.6)near=Math.min(near,d)}
-  growlT-=dt;if(near<5&&growlT<=0){SND.growl();growlT=1.2+near*.4}}
+    if(u.mode=='chase'&&dy<1.6&&d<near){near=d;nearT=t}}
+  growlT-=dt;if(near<6&&growlT<=0&&nearT){SND.growl(nearT.position);growlT=1.2+near*.4}}
 
 /* ================= radar ================= */
 let radarT=0;
@@ -662,9 +676,10 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
     {const rl=rails.find(r=>r.f==pf&&r.cells[r.at][0]==cx&&r.cells[r.at][1]==cz),k=rl?rl.f+','+cx+','+cz:'';if(k&&k!=cartHint){say('Gruvetralle',2200,mode=='desktop'?'Trykk E for å kjøre':'Trykk avtrekkeren eller klikk styrespaken for å kjøre');}cartHint=k}
     if(!ropeHint&&L.ropes.some(r=>r.f==pf&&(r.a[0]==cx&&r.a[1]==cz||r.b[0]==cx&&r.b[1]==cz))){ropeHint=true;say('Kløft med tau',3000,mode=='tele'?'Sikt over kløften og slipp – du henger deg over\neller hold grepknappen på tauet og dra deg bortover':mode=='desktop'?'Gå rett frem for å henge deg over':'Gå frem for å henge deg over\neller hold grepknappen på tauet og dra deg bortover')}
     updTrolls(dt);
-    dripT-=dt;if(dripT<0){SND.drip();dripT=2+Math.random()*6}}
+    dripT-=dt;if(dripT<0){const hh=headWorld();SND.drip(new THREE.Vector3(hh.x+(Math.random()-.5)*14,hh.y-1,hh.z+(Math.random()-.5)*14));dripT=1.5+Math.random()*5}}
   else if(state=='end'){for(const o of ctrls)if(o.gp&&(btn(o.gp,0)||btn(o.gp,4))){if(stT>1.5){panel.visible=false;beginRun()}}
     if(mode=='desktop'&&keys.has('Enter')&&stT>1)beginRun()}
+  updListener();if(ac&&ac.state!='running'&&Math.random()<dt)ac.resume().catch(()=>{});if(ac&&master&&!ambStarted&&ac.state=='running')startAmb();
   radarT-=dt;if(radarT<=0){radarT=.12;drawRadar()}
   renderer.render(scene,camera)});
 
@@ -672,7 +687,7 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
 function input(dt){
   updStance(dt);
   if(swingT>0){swingT-=dt;pick.rotation.x=-Math.sin((.35-swingT)/.35*Math.PI)*1.3}else pick.rotation.x=0;
-  if(mode=='desktop'){const sp=(crouching?1.4:running?4.6:3)*dt;
+  if(mode=='desktop'){const sp=(crouching?1.2:running?5:2.6)*dt;
     if(keys.has('KeyQ')&&!keys.has('_q')){keys.add('_q');const h=headWorld(),d=camera.getWorldDirection(new THREE.Vector3());throwStone(h.clone().addScaledVector(d,.4),d.multiplyScalar(9).add(new THREE.Vector3(0,2,0)))}if(!keys.has('KeyQ'))keys.delete('_q');
     if(keys.has('KeyF')&&!keys.has('_f')){keys.add('_f');const dx=Math.round(-Math.sin(yaw)),dz=Math.round(-Math.cos(yaw));const[px,pz]=cellOfHead();
       const ax=Math.abs(Math.sin(yaw))>Math.abs(Math.cos(yaw));dig(pf,px+(ax?Math.sign(-Math.sin(yaw)):0),pz+(ax?0:Math.sign(-Math.cos(yaw))))}
@@ -705,10 +720,10 @@ function input(dt){
     aimDig(R_);if(hit(R_,0)&&!tryRide()&&digTarget){dig(...digTarget);swingT=.35;try{R_.gp.hapticActuators&&R_.gp.hapticActuators[0]&&R_.gp.hapticActuators[0].pulse(.8,90)}catch(e){}}
     if(mode=='smooth'){if(Math.abs(ry)>.4){climb(-ry*1.6*dt);climbedFrame=true}}
     else{if(ry<-.6){R_.aim=true;aimTele(R_)}else if(R_.aim&&ry>-.3){R_.aim=false;doTele();ray.visible=marker.visible=false}}}
-  if(L_){const[lx,ly]=axes(L_.gp);if(ladderStick(-ly,dt))climbedFrame=true;else if(mode=='smooth'&&Math.hypot(lx,ly)>.15){const[hx,hz]=cellOfHead(),onRope=isChasm(pf,hx,hz),sp=(onRope?.8:crouching?.9:running?3.1:1.8)*dt;
+  if(L_){const[lx,ly]=axes(L_.gp);if(ladderStick(-ly,dt))climbedFrame=true;else if(mode=='smooth'&&Math.hypot(lx,ly)>.15){const[hx,hz]=cellOfHead(),onRope=isChasm(pf,hx,hz),sp=(onRope?.8:crouching?.8:running?3.9:1.5)*dt;
       const sx_=strafe?lx:0,fy=strafe?-ly:-ly*(Math.abs(ly)>.15?1:0);
-      vel.x+=((fwd.x*fy+right.x*sx_)*sp-vel.x)*Math.min(1,dt*8);vel.z+=((fwd.z*fy+right.z*sx_)*sp-vel.z)*Math.min(1,dt*8);moveBy(vel.x,vel.z);comfortT=Math.max(comfortT,Math.min(1,Math.hypot(lx,ly)*(running?1.3:1)))}else{vel.x=vel.z=0;running=false}}
-  for(const o of ctrls){if(!o.gp)continue;const c3=hit(o,3);if(c3||(o.hand=='left'&&hit(o,0))){if(!tryRide()&&c3&&o.hand=='left'&&mode=='smooth'){running=!running;say(running?'Løper':'Går',700)}}}
+      vel.x+=((fwd.x*fy+right.x*sx_)*sp-vel.x)*Math.min(1,dt*8);vel.z+=((fwd.z*fy+right.z*sx_)*sp-vel.z)*Math.min(1,dt*8);moveBy(vel.x,vel.z);comfortT=Math.max(comfortT,Math.min(1,Math.hypot(lx,ly)*(running?1.3:1)));runHold=0}else{vel.x=vel.z=0;runHold+=dt;if(runHold>.6)running=false}}
+  for(const o of ctrls){if(!o.gp)continue;const c3=hit(o,3);if(c3||(o.hand=='left'&&hit(o,0))){if(!tryRide()&&c3&&o.hand=='left'&&mode=='smooth'){running=!running;runHold=0;if(running)crouchLock=false;SND.clank()}else if(c3&&o.hand=='right'){crouchLock=!crouchLock;if(crouchLock)running=false;SND.clank()}}}
   // stein: grip lavt ved gulvet for å plukke opp, kast ved å slippe
   for(const o of ctrls){if(!o.gp)continue;const hp=o.g.getWorldPosition(new THREE.Vector3()),now=performance.now()/1000;o.hist=(o.hist||[]);o.hist.push([hp.clone(),now]);if(o.hist.length>6)o.hist.shift();
     const sq=btn(o.gp,1);if(sq&&!o.wasSq&&!o.grab&&!o.carry&&!o.grabR&&hp.y<floorY(pf)+.5&&!o.stone){o.stone=new THREE.Mesh(stoneGeo,MAT.ore);o.stone.position.set(0,-.02,-.04);o.g.add(o.stone);try{o.gp.hapticActuators[0].pulse(.3,30)}catch(e){}}
@@ -791,6 +806,7 @@ async function startXR(m){audio();mode=m;isAR=supAR;const type=isAR?'immersive-a
     renderer.xr.setReferenceSpaceType('local-floor');try{await renderer.xr.setSession(s)}catch(e){renderer.xr.setReferenceSpaceType('local');await renderer.xr.setSession(s)}renderer.xr.setFoveation&&renderer.xr.setFoveation(1);
     camera.position.set(0,0,0);$('menu').classList.add('hide');
     s.addEventListener('end',()=>{state='menu';$('menu').classList.remove('hide');renderer.setClearColor(0,1);camera.position.set(0,1.6,0)});
+    for(const ev of['selectstart','squeezestart','select'])s.addEventListener(ev,()=>audio());setTimeout(audio,500);
     beginRun()}catch(e){$('xrnote').textContent='Kunne ikke starte VR: '+(e&&e.message||e)}}
 $('bSmooth').onclick=()=>startXR('smooth');
 $('bResume').onclick=()=>{$('bResume').hidden=true;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';state=pausedFrom;try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}};
