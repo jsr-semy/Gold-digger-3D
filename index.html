@@ -43,7 +43,7 @@ details ul{margin:8px 0 0;padding-left:18px}
       <button id="bResume" hidden>Fortsett</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
-    <p class="note">Versjon 0.4</p>
+    <p class="note">Versjon 0.5</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
@@ -291,7 +291,7 @@ function buildLevel(n,hx,hz){
     const grp=new THREE.Group();grp.position.set(wx,y0,wz);
     for(const s of[-.3,.3]){const r=new THREE.Mesh(railG,MAT.wood);r.scale.y=len;r.position.set(s,len/2,0);grp.add(r)}
     for(let y=.3;y<len;y+=.32){const r=new THREE.Mesh(rungG,MAT.wood);r.position.set(0,y,0);grp.add(r)}
-    const hit=new THREE.Mesh(new THREE.BoxGeometry(.8,len,.5),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=len/2;hit.userData.lad=v;grp.add(hit);ladderMeshes.push(hit);
+    const hit=new THREE.Mesh(new THREE.BoxGeometry(1.5,len,1.5),new THREE.MeshBasicMaterial({visible:false}));hit.position.y=len/2;hit.userData.lad=v;grp.add(hit);ladderMeshes.push(hit);
     mine.add(grp)}
   // gull
   const gGeo=new THREE.IcosahedronGeometry(.14,0);
@@ -357,7 +357,7 @@ const rc=$('radar2d'),rg=rc.getContext('2d');const rtex=new THREE.CanvasTexture(
 const radar=new THREE.Group();
 {const face=new THREE.Mesh(new THREE.CircleGeometry(.07,48),new THREE.MeshBasicMaterial({map:rtex,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));face.position.y=.009;face.rotation.x=-Math.PI/2;radar.add(face);
  const rim=new THREE.Mesh(new THREE.CylinderGeometry(.078,.078,.01,48),new THREE.MeshStandardMaterial({color:0x8a6a3a,metalness:.7,roughness:.4}));radar.add(rim);
- const strap=new THREE.Mesh(new THREE.TorusGeometry(.045,.012,8,24),new THREE.MeshStandardMaterial({color:0x3a2416,roughness:.9}));strap.rotation.y=Math.PI/2;strap.position.y=-.04;radar.add(strap)}
+ const strap=new THREE.Mesh(new THREE.TorusGeometry(.045,.012,8,24),new THREE.MeshStandardMaterial({color:0x3a2416,roughness:.9}));strap.rotation.y=Math.PI/2;strap.position.y=-.075;radar.add(strap)}
 radar.position.set(0,.035,.11);radar.rotation.x=.55;rtex.generateMipmaps=false;rtex.minFilter=THREE.LinearFilter;
 
 /* ================= lyd ================= */
@@ -390,7 +390,18 @@ function moveBy(dx,dz){if(climbing())return;const h=headWorld();
   if(freeAt(pf,h.x+dx,h.z))rig.position.x+=dx;else if(freeAt(pf,h.x+dx*.3,h.z))rig.position.x+=dx*.3;
   headWorld(h);if(freeAt(pf,h.x,h.z+dz))rig.position.z+=dz;else if(freeAt(pf,h.x,h.z+dz*.3))rig.position.z+=dz*.3}
 function climb(dy){const[x,z]=cellOfHead();const la=ladderAt(x,z,pf)||ladderAt(x,z,nearestFloor(rig.position.y));if(!la)return false;
-  rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+dy));pf=nearestFloor(rig.position.y);return true}
+  rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+dy));pf=nearestFloor(rig.position.y);hugLadder(la);return true}
+function hugLadder(la){const h=headWorld(),[ax,az]=cw(la.x,la.z),side=Math.sign(h.z-az)||1;const tx=ax,tz=az+side*.42;setHeadXZ(h.x+(tx-h.x)*.15,h.z+(tz-h.z)*.15)}
+let climbDir=0,ladderLock=false,ladderHint=false;
+// skyv fremover ved stigen: klatre ned (fra toppen) eller opp (fra bunnen); bakover snur retningen
+function ladderStick(fwdAmt,dt){const h=headWorld(),[cx,cz]=wc(h.x,h.z),la=ladderAt(cx,cz,pf)||ladderAt(cx,cz,nearestFloor(rig.position.y));
+  if(!la){ladderLock=false;climbDir=0;return false}const[ax,az]=cw(la.x,la.z),d=Math.hypot(h.x-ax,h.z-az);
+  if(!ladderHint&&d<1){ladderHint=true;say('Stige',2600,mode=='tele'?'Pek på stigen og slipp spaken for å klatre':'Gå inntil stigen og skyv spaken frem\neller hold grepknappen og trekk deg opp/ned')}
+  if(ladderLock){if(Math.abs(fwdAmt)<.2||d>.7)ladderLock=false;else if(!climbing())return false}
+  if(climbing()){if(Math.abs(fwdAmt)>.2){if(!climbDir)climbDir=pf==la.top?-1:1;climb(climbDir*fwdAmt*1.9*dt);
+      if(!climbing()){climbDir=0;ladderLock=true;if(nearestFloor(rig.position.y)==la.top){const dir=camera.getWorldDirection(new THREE.Vector3());setHeadXZ(ax+Math.sign(dir.x)*(Math.abs(dir.x)>Math.abs(dir.z)?.75:0),az+Math.sign(dir.z)*(Math.abs(dir.z)>=Math.abs(dir.x)?.75:0))}}}return true}
+  const lk=camera.getWorldDirection(new THREE.Vector3()),facing=d<.2||((ax-h.x)*lk.x+(az-h.z)*lk.z)/(d*Math.hypot(lk.x,lk.z)||1)>.3;
+  if(d<.6&&fwdAmt>.3&&facing){climbDir=pf==la.top?-1:1;climb(climbDir*fwdAmt*1.9*dt);return true}return false}
 
 /* ================= kontrollere ================= */
 const ctrls=[];
@@ -542,7 +553,7 @@ function input(dt){
       const ax=Math.abs(Math.sin(yaw))>Math.abs(Math.cos(yaw));dig(pf,px+(ax?Math.sign(-Math.sin(yaw)):0),pz+(ax?0:Math.sign(-Math.cos(yaw))))}
     if(!keys.has('KeyF'))keys.delete('_f');let mx=0,mz=0;if(keys.has('KeyW')||keys.has('ArrowUp'))mz-=1;if(keys.has('KeyS')||keys.has('ArrowDown'))mz+=1;if(keys.has('KeyA'))mx-=1;if(keys.has('KeyD'))mx+=1;
     if(keys.has('ArrowLeft'))yaw+=dt*2;if(keys.has('ArrowRight'))yaw-=dt*2;rig.rotation.y=yaw;camera.rotation.set(pitch,0,0);
-    if(mx||mz){const c=Math.cos(yaw),s=Math.sin(yaw),l=Math.hypot(mx,mz);moveBy((mx*c+mz*s)/l*sp,(-mx*s+mz*c)/l*sp)}
+    if(ladderStick(-mz,dt)){}else if(mx||mz){const c=Math.cos(yaw),s=Math.sin(yaw),l=Math.hypot(mx,mz);moveBy((mx*c+mz*s)/l*sp,(-mx*s+mz*c)/l*sp)}
     if(keys.has('Space'))climb(1.6*dt);if(keys.has('KeyC')||keys.has('ControlLeft'))climb(-1.6*dt);return}
   const L_=ctrls.find(o=>o.hand=='left'&&o.gp),R_=ctrls.find(o=>o.hand=='right'&&o.gp);
   const fwd=camera.getWorldDirection(tmpV);fwd.y=0;fwd.normalize();const right=tmpV2.set(-fwd.z,0,fwd.x);
@@ -550,9 +561,9 @@ function input(dt){
   let grabbing=false;
   for(const o of ctrls){if(!o.gp)continue;const sq=btn(o.gp,1),ly=o.g.position.y;
     if(sq){const p=o.g.getWorldPosition(new THREE.Vector3());const[x,z]=wc(p.x,p.z);const la=ladderAt(x,z,pf)||ladderAt(x,z,nearestFloor(rig.position.y));
-      if(la){const[lx,lz]=cw(la.x,la.z);if(Math.hypot(p.x-lx,p.z-lz)<.55){if(o.grab){const d=o.lastY-ly;if(Math.abs(d)<.3){const h=headWorld();const[hx,hz]=wc(h.x,h.z);if(hx!=la.x||hz!=la.z)setHeadXZ(lx+(h.x-lx)*.3,lz+(h.z-lz)*.3);
+      if(la){const[lx,lz]=cw(la.x,la.z);if(Math.hypot(p.x-lx,p.z-lz)<.75){if(!o.nearLad){o.nearLad=true;try{o.gp.hapticActuators[0].pulse(.25,30)}catch(e){}}if(o.grab){const d=o.lastY-ly;if(Math.abs(d)<.3){const h=headWorld();const[hx,hz]=wc(h.x,h.z);if(hx!=la.x||hz!=la.z)setHeadXZ(lx+(h.x-lx)*.3,lz+(h.z-lz)*.3);
               rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+d));pf=nearestFloor(rig.position.y)}}
-          o.grab=true;grabbing=true}else o.grab=false}else o.grab=false}else o.grab=false;o.lastY=ly}
+          o.grab=true;grabbing=true}else{o.grab=false;o.nearLad=false}}else o.grab=false}else o.grab=false;o.lastY=ly}
   if(!grabbing&&climbing()){const top=floorY(nearestFloor(rig.position.y));if(Math.abs(rig.position.y-top)<.6)rig.position.y+=(top-rig.position.y)*Math.min(1,dt*4)}
   if(R_){const[rx,ry]=axes(R_.gp);
     if(!(mode=='tele'&&R_.aim)){if(snapTurn){if(Math.abs(rx)>.7&&!snapLock){turn(-Math.sign(rx)*Math.PI/6);snapLock=true}if(Math.abs(rx)<.3)snapLock=false}
@@ -560,7 +571,7 @@ function input(dt){
     aimDig(R_);if(hit(R_,0)&&digTarget){dig(...digTarget);swingT=.35;try{R_.gp.hapticActuators&&R_.gp.hapticActuators[0]&&R_.gp.hapticActuators[0].pulse(.8,90)}catch(e){}}
     if(mode=='smooth'){if(Math.abs(ry)>.4)climb(-ry*1.6*dt)}
     else{if(ry<-.6){R_.aim=true;aimTele(R_)}else if(R_.aim&&ry>-.3){R_.aim=false;doTele();ray.visible=marker.visible=false}}}
-  if(L_&&mode=='smooth'){const[lx,ly]=axes(L_.gp);if(Math.hypot(lx,ly)>.15){const sp=2.2*dt;moveBy((fwd.x*-ly+right.x*lx)*sp,(fwd.z*-ly+right.z*lx)*sp)}}
+  if(L_&&mode=='smooth'){const[lx,ly]=axes(L_.gp);if(!ladderStick(-ly,dt)&&Math.hypot(lx,ly)>.15){const sp=2.2*dt;moveBy((fwd.x*-ly+right.x*lx)*sp,(fwd.z*-ly+right.z*lx)*sp)}}
 }
 function hit(o,i){const p=btn(o.gp,i),w=o['p'+i];o['p'+i]=p;return p&&!w}
 function aimDig(o){digTarget=null;digMark.visible=false;if(o.aim||climbing())return;const c=o.c,p=c.getWorldPosition(new THREE.Vector3()),q=c.getWorldQuaternion(new THREE.Quaternion());
@@ -597,6 +608,7 @@ function aimTele(o){const c=o.c;const p=c.getWorldPosition(new THREE.Vector3()),
   ray.visible=true;const end=hits[0]?hits[0].point:p.clone().addScaledVector(d,8);ray.geometry.setFromPoints([p,end]);
   if(hits[0]){const ht=hits[0];let lad=null;let o2=ht.object;while(o2&&!lad){lad=o2.userData&&o2.userData.lad;o2=o2.parent}
     const[px,pz]=cellOfHead();
+    if(!lad){const[hx2,hz2]=wc(ht.point.x,ht.point.z);lad=ladderAt(hx2,hz2,pf)||null;if(lad&&lad.top!=pf&&lad.bottom!=pf)lad=null}
     if(lad){const near=Math.abs(lad.x-px)+Math.abs(lad.z-pz)<=1,toF=pf==lad.top?lad.bottom:lad.top,blocked=trolls.some(t=>{const c=trollCell(t);return c[0]==toF&&c[1]==lad.x&&c[2]==lad.z});
       if(near&&!blocked&&(pf==lad.top||pf==lad.bottom)){teleTarget={lad};ray.material.color.set(0xffd23a)}else ray.material.color.set(0xff5040);marker.visible=false;return}
     const f=nearestFloor(ht.point.y),[tx,tz]=wc(ht.point.x,ht.point.z);let ok=f==pf&&!climbing()&&Math.abs(ht.point.y-floorY(f))<.2&&(tx==px||tz==pz)&&!(tx==px&&tz==pz);
