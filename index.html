@@ -26,6 +26,13 @@ details ul{margin:8px 0 0;padding-left:18px}
 #radar2d{position:fixed;left:14px;bottom:14px;width:180px;height:180px;border-radius:50%;display:none;z-index:3;box-shadow:0 0 0 3px #3a2a20}
 #hint{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);background:#000a;padding:8px 14px;border-radius:10px;font-size:14px;display:none;z-index:3;white-space:nowrap}
 #cross{position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff8;display:none;z-index:3}
+#hint{transition:opacity .8s}#hint.fade{opacity:0}
+body.tv #radar2d{width:30vmin;height:30vmin;left:4vmin;bottom:4vmin;box-shadow:0 0 0 .5vmin #3a2a20}
+body.tv #hint{font-size:2.2vmin;bottom:4vmin;padding:1vmin 2vmin;border-radius:1.4vmin;white-space:normal;max-width:80vw;text-align:center}
+body.tv #cross{width:1vmin;height:1vmin;margin:-.5vmin}
+body.tv .card{max-width:900px}body.tv h1{font-size:6vmin}body.tv .sub,body.tv .note{font-size:2.2vmin}body.tv .btns{max-width:640px;gap:1.4vmin}body.tv button{font-size:2.8vmin;min-height:8vmin;border-radius:2vmin}
+#menu button:focus{outline:4px solid #fff;outline-offset:3px;transform:scale(1.03)}
+#padnote{display:none}#padnote.on{display:block;color:#7dff9a}
 </style>
 </head>
 <body>
@@ -41,9 +48,11 @@ details ul{margin:8px 0 0;padding-left:18px}
       <button id="bSmooth" disabled>Start i VR – gå med styrespak</button>
       <button id="bTele" disabled>Start i VR – teleport</button>
       <button id="bResume" hidden>Fortsett</button>
+      <button id="bTV">Spill på TV – Xbox-kontroll</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
-    <p class="note">Versjon 0.12</p>
+    <p class="note">Versjon 0.13</p>
+    <p class="note" id="padnote">🎮 Kontroll tilkoblet – bruk styrekorset og A for å velge</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
@@ -58,6 +67,7 @@ details ul{margin:8px 0 0;padding-left:18px}
         <li><b>Tau over kløfter:</b> gå frem (styrespak) eller sikt over kløften (teleport), så henger du deg over. Du kan også holde grepknappen på tauet og dra deg hånd over hånd.</li>
         <li><b>Gruvetralle:</b> stå i tralla og trykk avtrekkeren (pekefinger) eller klikk ned styrespaken. Troll på skinnene blir dyttet bort.</li>
         <li><b>Meny/pause:</b> trykk Y eller X på venstre kontroll, eller B på høyre.</li>
+        <li><b>TV-modus (Xbox-kontroll):</b> venstre spak går, høyre spak ser, RT graver, LT kaster stein, A kjører tralle og klatrer opp, B klatrer ned og slipper tauet, X sniker, klikk venstre spak for å løpe, Y snur deg rundt, Menu-knappen pauser.</li>
         <li><b>Teleport-modus:</b> skyv høyre spak fremover, sikt på gulvet og slipp. Du kan hoppe opptil 4 ruter rett frem, men ikke forbi troll.</li>
         <li><b>Klatring:</b> stå ved stigen, hold inne grepknappen og trekk deg opp eller ned, hånd over hånd.</li>
         <li><b>Radar:</b> se på venstre håndledd. Røde prikker er troll, gule er gull, grønn er utgangen.</li>
@@ -609,11 +619,11 @@ function startIntro(){state='intro';stT=0;rig.position.set(0,0,0);rig.rotation.s
   say('Hør …',2600,'Noe knaker under gulvet');SND.rumble()}
 function dropIn(fromY){state='fall';stT=0;rig.position.y=fromY;mine.visible=true;shaft.visible=true;room.visible=false;renderer.setClearColor(0x000000,1);scene.fog.density=.05;SND.fall()}
 function landed(){state='play';pf=0;rig.position.y=floorY(0);graceT=3;goldGot=0;goldTotal=L.gold.length;
-  say(`Nivå ${level+1}`,2800,`${goldTotal} gullklumper · ${trolls.length} troll · ${L.F} etasjer\nSe på venstre håndledd for radar`)}
+  say(`Nivå ${level+1}`,2800,`${goldTotal} gullklumper · ${trolls.length} troll · ${L.F} etasjer\n${mode=='desktop'?'Radaren er nede til venstre':'Se på venstre håndledd for radar'}`)}
 function openExit(){exitOpen=true;SND.open();exitGroup.getObjectByName('lid').visible=false;['hole','rim'].forEach(n=>exitGroup.getObjectByName(n).visible=true);
   exitGroup.getObjectByName('lt').intensity=4;say('Alt gullet er samlet!',3500,`Finn hullet i ${L.F}. etasje (grønt på radaren)`)}
 function nextLevel(){state='between';stT=0;SND.fall()}
-function caught(){lives--;SND.hurt();state='hurt';stT=0;fadeMat.color.set(0x880000)}
+function caught(){lives--;SND.hurt();rumble(1,1,450);state='hurt';stT=0;fadeMat.color.set(0x880000)}
 function respawn(){const[wx,wz]=cw(...L.start);rig.position.y=floorY(0);pf=0;setHeadXZ(wx,wz);
   for(const t of trolls){const u=t.userData;u.mode='patrol';u.goal=null;u.eyeMat.color.set(0xffd23a);u.f=u.sf;u.x=u.sx;u.z=u.sz;u.from=u.to=null;u.p=1;u.trap=0;u.inPit=false;u.fromPit=false;for(const h of holes.values())h.troll=null;const[x,z]=cw(u.x,u.z);t.position.set(x,floorY(u.f),z)}
   graceT=3;state='play';fadeMat.color.set(0);say(`${lives} liv igjen`,2000)}
@@ -660,7 +670,7 @@ function perceive(t,dt){const u=t.userData,now=performance.now();if(u.markT>0){u
   for(const e of noises){if(e.used.has(t))continue;const dist=Math.hypot(e.wx-t.position.x,e.wz-t.position.z)+Math.abs(e.f-u.f)*FLOOR_H*1.3;
     if(dist<e.r){e.used.add(t);if(u.mode!='chase'){if(u.mode!='inv'||!u.goal||u.goal.join()!=[e.f,e.x,e.z].join())alertFx(t,true);u.mode='inv';u.goal=[e.f,e.x,e.z];u.waitT=0}else if(now-u.lastSeen>1800)u.goal=[e.f,e.x,e.z]}}}
 function updStance(dt){const hy=camera.position.y+seatOff;
-  if(mode=='desktop'){crouching=keys.has('KeyZ');camera.position.y+=((crouching?1.0:1.6)-camera.position.y)*Math.min(1,dt*10);running=keys.has('ShiftLeft')&&!crouching}
+  if(mode=='desktop'){crouching=keys.has('KeyZ')||padSneak;camera.position.y+=((crouching?1.0:1.6)-camera.position.y)*Math.min(1,dt*10);running=(keys.has('ShiftLeft')||padRun||pHeld(4))&&!crouching}
   else{if(hy>standH)standH=hy;else standH-=dt*.003;crouching=crouchLock||standH-hy>.3}
   const t=crouching?'Sniker':running?'Løper':'';if(t!=stanceTxt){stanceTxt=t}
   // fargetone: kaldere ved løping, dempet lykt ved sniking
@@ -742,6 +752,7 @@ function drawRadar(){const S=256,c=S/2,px=17;rg.clearRect(0,0,S,S);rg.save();rg.
 /* ================= hovedløkke ================= */
 const clock=new THREE.Clock();
 renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
+  if(!renderer.xr.isPresenting){pollPad();const wasPause=state=='pause';padMenu(dt);if(!wasPause&&mode=='desktop'&&state=='play'&&(pHit(9)||pHit(8)))pauseDesktop()}
   rig.updateMatrixWorld();
   if(panelT<1e8){panelT-=dt*1000;if(panelT<=0)panel.visible=false}
   if(state=='intro'){const t=stT;crack.material.color.setHSL(.07,1,.35+.25*Math.abs(Math.sin(t*9)));crackLight.intensity=t>1?2+Math.sin(t*20):0;
@@ -766,7 +777,7 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
     const hands=ctrls.filter(o=>o.gp).map(o=>o.g.getWorldPosition(new THREE.Vector3()));
     for(const g of goldItems){if(!g.visible)continue;const u=g.userData;g.rotation.y+=dt*1.2;g.position.y=floorY(u.f)+(u.hy||.25)+Math.sin(performance.now()/500+u.ph)*.04;
       const byHead=u.f==pf&&u.x==cx&&u.z==cz&&!climbing(),byHand=hands.some(p=>p.distanceTo(g.position)<.35);
-      if(byHead||byHand){g.visible=false;goldGot++;SND.gold();if(goldGot>=goldTotal)openExit();else say(`Gull ${goldGot}/${goldTotal}`,1200)}}
+      if(byHead||byHand){g.visible=false;goldGot++;SND.gold();rumble(0,.35,70);if(goldGot>=goldTotal)openExit();else say(`Gull ${goldGot}/${goldTotal}`,1200)}}
     if(exitOpen){exitGroup.getObjectByName('rim').material.opacity=.6+.4*Math.sin(performance.now()/200);
       if(pf==L.F-1&&cx==L.exit[0]&&cz==L.exit[1]&&!climbing())nextLevel()}
     {const rl=rails.find(r=>r.f==pf&&r.cells[r.at][0]==cx&&r.cells[r.at][1]==cz),k=rl?rl.f+','+cx+','+cz:'';if(k&&k!=cartHint){say('Gruvetralle',2200,mode=='desktop'?'Trykk E for å kjøre':'Trykk avtrekkeren eller klikk styrespaken for å kjøre');}cartHint=k}
@@ -774,7 +785,7 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
     updTrolls(dt);
     dripT-=dt;if(dripT<0){const hh=headWorld();SND.drip(new THREE.Vector3(hh.x+(Math.random()-.5)*14,hh.y-1,hh.z+(Math.random()-.5)*14));dripT=1.5+Math.random()*5}}
   else if(state=='end'){for(const o of ctrls)if(o.gp&&(btn(o.gp,0)||btn(o.gp,4))){if(stT>1.5){panel.visible=false;beginRun()}}
-    if(mode=='desktop'&&keys.has('Enter')&&stT>1)beginRun()}
+    if(mode=='desktop'&&(keys.has('Enter')||pHit(0))&&stT>1)beginRun()}
   updListener();if(ac&&ac.state!='running'&&Math.random()<dt)ac.resume().catch(()=>{});if(ac&&master&&!ambStarted&&ac.state=='running')startAmb();
   radarT-=dt;if(radarT<=0){radarT=.12;drawRadar()}
   renderer.render(scene,camera)});
@@ -784,14 +795,21 @@ function input(dt){
   updStance(dt);
   if(swingT>0){swingT-=dt;pick.rotation.x=-Math.sin((.35-swingT)/.35*Math.PI)*1.3}else pick.rotation.x=0;
   if(mode=='desktop'){const sp=(crouching?1.2:running?5:2.6)*dt;
+    // spillkontroll (Xbox / standard-oppsett)
+    if(pad.on){const cv=v=>Math.sign(v)*v*v;yaw-=cv(pad.rx)*dt*2.8*lookSens;pitch=Math.max(-1.3,Math.min(1.3,pitch-cv(pad.ry)*dt*1.9*lookSens*(invertY?-1:1)));
+      if(pHit(6)){const h=headWorld(),d=camera.getWorldDirection(new THREE.Vector3());throwStone(h.clone().addScaledVector(d,.4),d.multiplyScalar(9).add(new THREE.Vector3(0,2,0)));rumble(.1,.3,60)}
+      if(pHit(7))padDig=true;if(pHit(2)||pHit(11)){padSneak=!padSneak;if(padSneak)padRun=false;SND.clank()}
+      if(pHit(10)){padRun=!padRun;if(padRun)padSneak=false;SND.clank()}
+      if(pHit(3)){yaw+=Math.PI}if(pHit(0))tryRide();
+      if(Math.hypot(pad.lx,pad.ly)<.1){padIdle+=dt;if(padIdle>.6)padRun=false}else padIdle=0}
     if(keys.has('KeyQ')&&!keys.has('_q')){keys.add('_q');const h=headWorld(),d=camera.getWorldDirection(new THREE.Vector3());throwStone(h.clone().addScaledVector(d,.4),d.multiplyScalar(9).add(new THREE.Vector3(0,2,0)))}if(!keys.has('KeyQ'))keys.delete('_q');
-    if(keys.has('KeyF')&&!keys.has('_f')){keys.add('_f');const dx=Math.round(-Math.sin(yaw)),dz=Math.round(-Math.cos(yaw));const[px,pz]=cellOfHead();
-      const ax=Math.abs(Math.sin(yaw))>Math.abs(Math.cos(yaw));dig(pf,px+(ax?Math.sign(-Math.sin(yaw)):0),pz+(ax?0:Math.sign(-Math.cos(yaw))))}
-    if(!keys.has('KeyF'))keys.delete('_f');let mx=0,mz=0;if(keys.has('KeyW')||keys.has('ArrowUp'))mz-=1;if(keys.has('KeyS')||keys.has('ArrowDown'))mz+=1;if(keys.has('KeyA'))mx-=1;if(keys.has('KeyD'))mx+=1;
+    if((keys.has('KeyF')&&!keys.has('_f'))||padDig){if(!padDig)keys.add('_f');padDig=false;const dx=Math.round(-Math.sin(yaw)),dz=Math.round(-Math.cos(yaw));const[px,pz]=cellOfHead();
+      const ax=Math.abs(Math.sin(yaw))>Math.abs(Math.cos(yaw));if(dig(pf,px+(ax?Math.sign(-Math.sin(yaw)):0),pz+(ax?0:Math.sign(-Math.cos(yaw)))))rumble(.7,.4,120)}
+    if(!keys.has('KeyF'))keys.delete('_f');let mx=0,mz=0;if(keys.has('KeyW')||keys.has('ArrowUp'))mz-=1;if(keys.has('KeyS')||keys.has('ArrowDown'))mz+=1;if(keys.has('KeyA'))mx-=1;if(keys.has('KeyD'))mx+=1;if(pad.on){mx+=pad.lx;mz+=pad.ly}
     if(keys.has('ArrowLeft'))yaw+=dt*2;if(keys.has('ArrowRight'))yaw-=dt*2;rig.rotation.y=yaw;camera.rotation.set(pitch,0,0);
     if(keys.has('KeyE')&&!keys.has('_e')){keys.add('_e');tryRide()}if(!keys.has('KeyE'))keys.delete('_e');
-    if(ladderStick(-mz,dt)){}else if(mx||mz){const c=Math.cos(yaw),s=Math.sin(yaw),l=Math.hypot(mx,mz);moveBy((mx*c+mz*s)/l*sp,(-mx*s+mz*c)/l*sp)}
-    if(keys.has('Space'))climb(1.6*dt);if(keys.has('KeyC')||keys.has('ControlLeft')){if(onRope())startDrop();else climb(-1.6*dt)}return}
+    if(ladderStick(-mz,dt)){}else if(mx||mz){const c=Math.cos(yaw),s=Math.sin(yaw),l=Math.max(1,Math.hypot(mx,mz));moveBy((mx*c+mz*s)/l*sp,(-mx*s+mz*c)/l*sp)}
+    if(keys.has('Space')||pHeld(0)||pHeld(12))climb(1.6*dt);if(keys.has('KeyC')||keys.has('ControlLeft')||pHeld(1)||pHeld(13)){if(onRope())startDrop();else climb(-1.6*dt)}return}
   const L_=ctrls.find(o=>o.hand=='left'&&o.gp),R_=ctrls.find(o=>o.hand=='right'&&o.gp);
   const fwd=camera.getWorldDirection(tmpV);fwd.y=0;fwd.normalize();const right=tmpV2.set(-fwd.z,0,fwd.x);
   // klatring med hender (stige) og hånd-over-hånd (tau)
@@ -909,15 +927,48 @@ async function startXR(m){audio();mode=m;isAR=supAR;const type=isAR?'immersive-a
     for(const ev of['selectstart','squeezestart','select'])s.addEventListener(ev,()=>audio());setTimeout(audio,500);
     beginRun()}catch(e){$('xrnote').textContent='Kunne ikke starte VR: '+(e&&e.message||e)}}
 $('bSmooth').onclick=()=>startXR('smooth');
-$('bResume').onclick=()=>{$('bResume').hidden=true;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';state=pausedFrom;try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}};
+$('bResume').onclick=()=>{$('bResume').hidden=true;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';state=pausedFrom;showHint();document.activeElement&&document.activeElement.blur&&document.activeElement.blur();if(tv)return;try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}};
 $('bTele').onclick=()=>startXR('tele');
-$('bPC').onclick=()=>{audio();$('bResume').hidden=true;mode='desktop';isAR=false;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';
+$('bPC').onclick=()=>{audio();tv=false;document.body.classList.remove('tv');showHint();$('bResume').hidden=true;mode='desktop';isAR=false;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';
   camera.position.set(0,1.6,0);yaw=0;pitch=0;beginRun();try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}};
-renderer.domElement.addEventListener('click',()=>{if(mode=='desktop'&&state!='menu')try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}});
+renderer.domElement.addEventListener('click',()=>{if(mode=='desktop'&&state!='menu'&&!tv)try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}});
 addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement){yaw-=e.movementX*.0025;pitch=Math.max(-1.3,Math.min(1.3,pitch-e.movementY*.0025))}});
-addEventListener('keydown',e=>{keys.add(e.code);if(e.code=='Escape'&&mode=='desktop'&&!renderer.xr.isPresenting){if(state=='play'){pausedFrom='play';$('bResume').hidden=false}state='pause';$('menu').classList.remove('hide');rc.style.display='none';$('hint').style.display='none';$('cross').style.display='none'}});
+function pauseDesktop(){if(state=='play'){pausedFrom='play';$('bResume').hidden=false}state='pause';$('menu').classList.remove('hide');rc.style.display='none';$('hint').style.display='none';$('cross').style.display='none';if(pad.on)setTimeout(()=>$('bResume').focus(),0)}
+addEventListener('keydown',e=>{keys.add(e.code);if(e.code=='Escape'&&mode=='desktop'&&!renderer.xr.isPresenting)pauseDesktop()});
 addEventListener('keyup',e=>keys.delete(e.code));
-window.__dbg={get modes(){return trolls.map(t=>t.userData.mode)},makeNoise,get noises(){return noises.length},get barrels(){return barrelEnts.filter(b=>!b.dead).map(b=>[b.f,b.g.position.x,b.g.position.z])},get obst(){return obst.length},cellOfHead,get rails(){return rails.map(r=>({f:r.f,cells:r.cells,at:r.at}))},get ropes(){return L.ropes},tryRide,get pf(){return pf},setLevel(n){level=n;restartLevel()},get lanterns(){return lanterns.map(l=>[l.f,l.x,l.z])},get cages(){return cages.map(l=>[l.f,l.x,l.z])},wc:(x,z)=>wc(x,z),dig,get holes(){return holes},openMenu,goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
+/* ================= TV-modus: Xbox-kontroll (Gamepad API) ================= */
+let tv=false,padRun=false,padSneak=false,padDig=false,padIdle=0,navCool=0,lookSens=1,invertY=false,hintTimer=0;
+const pad={on:false,gp:null,lx:0,ly:0,rx:0,ry:0,down:[],prev:[]};
+function getPad(){const ps=navigator.getGamepads?[...navigator.getGamepads()].filter(p=>p&&p.connected&&!/oculus|meta|openxr|quest/i.test(p.id)):[];
+  return ps.find(p=>p.mapping=='standard')||ps.find(p=>p.buttons.length>=12)||null}
+function pollPad(){pad.prev=pad.down;const p=getPad();if(!p){pad.on=false;pad.gp=null;pad.down=[];pad.lx=pad.ly=pad.rx=pad.ry=0;return}
+  pad.on=true;pad.gp=p;pad.down=p.buttons.map(b=>b.pressed||b.value>.5);
+  const stick=(x,y)=>{const m=Math.hypot(x,y);if(m<.18)return[0,0];const k=Math.min(1,(m-.18)/.82)/m;return[x*k,y*k]};
+  [pad.lx,pad.ly]=stick(p.axes[0]||0,p.axes[1]||0);[pad.rx,pad.ry]=stick(p.axes[2]||0,p.axes[3]||0)}
+function pHit(i){return!!pad.down[i]&&!pad.prev[i]}
+function pHeld(i){return!!pad.down[i]}
+function rumble(s,w,ms){try{const a=pad.gp&&pad.gp.vibrationActuator;a&&a.playEffect&&a.playEffect('dual-rumble',{duration:ms,strongMagnitude:s,weakMagnitude:w}).catch(()=>{})}catch(e){}}
+const HINT_PC='Klikk for å styre med musa · WASD gå · Mellomrom/C klatre · F grav · E tralle · Shift løp · Z snik · Q kast stein · Esc pause',
+  HINT_PAD='Venstre spak: gå · Høyre spak: se · RT: grav · LT: kast stein · A: tralle / klatre opp · B: klatre ned / slipp tau · X: snik · Klikk venstre spak: løp · Y: snu · ☰ Menu: pause';
+function showHint(){const h=$('hint');h.textContent=pad.on||tv?HINT_PAD:HINT_PC;h.classList.remove('fade');clearTimeout(hintTimer);hintTimer=setTimeout(()=>h.classList.add('fade'),tv?14000:20000)}
+// menynavigering med kontrollen (startskjerm og pause)
+function padMenu(dt){$('padnote').classList.toggle('on',pad.on);const m=$('menu');if(!pad.on||m.classList.contains('hide'))return;
+  const bs=[...m.querySelectorAll('.btns button')].filter(b=>!b.hidden&&!b.disabled);if(!bs.length)return;
+  let i=bs.indexOf(document.activeElement);navCool-=dt;const v=pad.ly+(pHeld(13)?1:0)-(pHeld(12)?1:0);
+  if(i<0){if(Math.abs(v)>.5||pHit(0)||pHit(12)||pHit(13)){const d=!$('bResume').hidden?$('bResume'):$('bTV');(bs.includes(d)?d:bs[0]).focus();navCool=.25}return}
+  if(Math.abs(v)>.5&&navCool<=0){i=(i+(v>0?1:-1)+bs.length)%bs.length;bs[i].focus();navCool=pHit(12)||pHit(13)?.2:.28}
+  if(Math.abs(v)<.3&&!pHeld(12)&&!pHeld(13))navCool=0;
+  if(pHit(0))document.activeElement.click();
+  if((pHit(1)||pHit(9))&&!$('bResume').hidden&&state=='pause')$('bResume').click()}
+addEventListener('gamepadconnected',()=>{pollPad();if(mode=='desktop'&&state!='menu')showHint()});
+$('bTV').onclick=()=>{audio();tv=true;document.body.classList.add('tv');
+  try{const el=document.documentElement,r=el.requestFullscreen?el.requestFullscreen({navigationUI:'hide'}):el.webkitRequestFullscreen&&el.webkitRequestFullscreen();r&&r.catch&&r.catch(()=>{})}catch(e){}
+  // TV: tegn i maks ~1080p for jevn bildefrekvens på store skjermer
+  renderer.setPixelRatio(Math.min(devicePixelRatio,1920/Math.max(1,innerWidth)));renderer.setSize(innerWidth,innerHeight);
+  $('bResume').hidden=true;mode='desktop';isAR=false;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';
+  document.activeElement&&document.activeElement.blur&&document.activeElement.blur();camera.position.set(0,1.6,0);yaw=0;pitch=0;padRun=padSneak=false;showHint();beginRun();
+  if(!pad.on)say('Koble til kontrollen',4000,'Slå på Xbox-kontrollen (eller koble til med USB / Bluetooth)\nog trykk en knapp')};
+window.__dbg={pad,get tv(){return tv},get modes(){return trolls.map(t=>t.userData.mode)},makeNoise,get noises(){return noises.length},get barrels(){return barrelEnts.filter(b=>!b.dead).map(b=>[b.f,b.g.position.x,b.g.position.z])},get obst(){return obst.length},cellOfHead,get rails(){return rails.map(r=>({f:r.f,cells:r.cells,at:r.at}))},get ropes(){return L.ropes},tryRide,get pf(){return pf},setLevel(n){level=n;restartLevel()},get lanterns(){return lanterns.map(l=>[l.f,l.x,l.z])},get cages(){return cages.map(l=>[l.f,l.x,l.z])},wc:(x,z)=>wc(x,z),dig,get holes(){return holes},openMenu,goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
 if(navigator.xr){Promise.all([navigator.xr.isSessionSupported('immersive-vr').catch(()=>false),navigator.xr.isSessionSupported('immersive-ar').catch(()=>false)]).then(([vr,ar])=>{
   const ok=vr||ar;supAR=ar;$('bSmooth').disabled=$('bTele').disabled=!ok;
   $('xrnote').textContent=ok?(ar?'Klar for VR. Du starter i stua med kamera-gjennomsyn.':'Klar for VR.'):'VR er ikke tilgjengelig her. Åpne siden i nettleseren på Meta Quest 3.'})}

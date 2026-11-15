@@ -11,6 +11,7 @@ Gulvet i stua åpner seg, og du faller ned i en gruve full av gull og troll. Sam
 - To bevegelsesmoduser: styrespak (glatt) og teleport
 - Klatring i stiger med grepknappen, hånd over hånd
 - Radar på venstre håndledd: troll (rødt), gull (gult), utgang (grønt)
+- TV-modus med Xbox-kontroll (fullskjerm, stor radar)
 - PC-modus for testing: WASD, mus, mellomrom/C for å klatre
 
 Alt ligger i `index.html` (Three.js fra CDN, ingen byggesteg).

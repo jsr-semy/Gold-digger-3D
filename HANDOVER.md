@@ -7,7 +7,7 @@ Første del av utviklingen skjedde i en samtale som også handlet om iPhone-spil
 - **Spill (GitHub Pages):** https://jsr-semy.github.io/Gold-digger-3D/ (legg til `?v=N` for å unngå gammel buffer på Quest)
 - **Repo:** https://github.com/jsr-semy/Gold-digger-3D (gren `main`, Pages fra rot)
 - **Alt i én fil:** `index.html`. Three.js 0.160.0 fra jsDelivr via importmap, ingen byggesteg.
-- **Versjon:** 0.12 (står under knappene på startskjermen). Øk versjonen ved hver publisering, så det er lett å se at Quest har lastet riktig fil.
+- **Versjon:** 0.13 (står under knappene på startskjermen). Øk versjonen ved hver publisering, så det er lett å se at Quest har lastet riktig fil.
 - **Publisering:** commit og push til `main`. Pages-bygget tar rundt ett minutt. Status kan sjekkes med `https://api.github.com/repos/jsr-semy/Gold-digger-3D/actions/runs?per_page=1`.
 
 ## Konseptet
@@ -70,6 +70,26 @@ Tre tilstander, vist med øyefarge og et tegn over hodet:
 - **Komfort:** vignett ved bevegelse, ro-prikker (fast referanseramme festet til kroppen), myk akselerasjon, sittende modus (+45 cm).
 
 **PC-testmodus:** WASD/mus, mellomrom/C klatre, F grav, E tralle, Shift løp, Z snik, Q kast stein, Esc pause.
+
+## TV-modus (Xbox-kontroll) – fra 0.13
+
+Startknapp «Spill på TV – Xbox-kontroll». Bygger på PC-modusen (`mode='desktop'`, flagg `tv=true`) og leser kontrollen via Gamepad API (`pollPad()` hver frame, standard-oppsett). Fullskjerm, større radar/tekst (`body.tv`), og oppløsning begrenset til ca. 1080p for jevn bildefrekvens. Kontrollen virker også i vanlig PC-modus.
+
+| Knapp | Funksjon |
+|---|---|
+| Venstre spak | gå (analog) |
+| Høyre spak | se rundt |
+| RT | grav |
+| LT | kast stein |
+| A | kjør tralle / klatre opp (holdes) |
+| B | klatre ned / slipp tauet |
+| X eller klikk høyre spak | snik av/på |
+| Klikk venstre spak / hold LB | løp |
+| Y | snu 180° |
+| Styrekors opp/ned | klatre |
+| ☰ Menu / View | pause |
+
+Menyene navigeres med styrekors/venstre spak og A; B eller Menu fortsetter fra pause. Vibrasjon ved graving, gull og når trollet tar deg. Testet i headless Chrome med simulert kontroll; må verifiseres med ekte kontroll på TV (Xbox-nettleser, PC via HDMI eller smart-TV).
 
 ## Lyd
 
