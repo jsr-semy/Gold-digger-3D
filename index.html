@@ -32,7 +32,7 @@ details ul{margin:8px 0 0;padding-left:18px}
 <canvas id="gl"></canvas>
 <canvas id="radar2d" width="256" height="256"></canvas>
 <div id="cross"></div>
-<div id="hint">Klikk for å styre med musa · WASD gå · Mellomrom/C klatre · Esc meny</div>
+<div id="hint">Klikk for å styre med musa · WASD gå · Mellomrom/C klatre · F grav · Esc pause</div>
 <div id="menu">
   <div class="card">
     <h1>Gullgraveren: Dypet</h1>
@@ -40,15 +40,18 @@ details ul{margin:8px 0 0;padding-left:18px}
     <div class="btns">
       <button id="bSmooth" disabled>Start i VR – gå med styrespak</button>
       <button id="bTele" disabled>Start i VR – teleport</button>
+      <button id="bResume" hidden>Fortsett</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
-    <p class="note">Versjon 0.2</p>
+    <p class="note">Versjon 0.3</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
       <ul>
-        <li><b>Styrespak-modus:</b> venstre spak går, høyre spak sidelengs snur 30°, høyre spak opp/ned klatrer i stiger.</li>
-        <li><b>Teleport-modus:</b> skyv høyre spak fremover, sikt på gulvet eller en stige og slipp.</li>
+        <li><b>Styrespak-modus:</b> venstre spak går, høyre spak sidelengs snur mykt, høyre spak opp/ned klatrer i stiger.</li>
+        <li><b>Grav:</b> pek hakka (høyre hånd) på gulvruta ved siden av deg og trykk avtrekkeren. Trollet faller i hullet og blir sittende fast en stund, og du kan gå over det.</li>
+        <li><b>Meny/pause:</b> trykk Y eller X på venstre kontroll, eller B på høyre.</li>
+        <li><b>Teleport-modus:</b> skyv høyre spak fremover, sikt på gulvet og slipp. Du kan hoppe opptil 4 ruter rett frem, men ikke forbi troll.</li>
         <li><b>Klatring:</b> stå ved stigen, hold inne grepknappen og trekk deg opp eller ned, hånd over hånd.</li>
         <li><b>Radar:</b> se på venstre håndledd. Røde prikker er troll, gule er gull, grønn er utgangen.</li>
         <li>Når alt gull er samlet, åpner det seg et hull i nederste etasje. Gå oppi det for å falle videre.</li>
@@ -61,7 +64,7 @@ details ul{margin:8px 0 0;padding-left:18px}
 import * as THREE from 'three';
 
 /* ================= konstanter ================= */
-const CELL=2, WALL_H=2.6, FLOOR_H=3.4, BASE=-4.2, NLEV=8, RADIUS=0.28;
+const CELL=2, WALL_H=2.6, FLOOR_H=3.9, PIT=1.15, HOLE_T=8, BASE=-4.2, NLEV=8, RADIUS=0.28;
 const floorY=f=>BASE-f*FLOOR_H;
 const $=id=>document.getElementById(id);
 
@@ -146,7 +149,8 @@ function genLevel(n){
 
 /* ================= nivå-tilstand ================= */
 let L=null,OX=0,OZ=0,mine=null,shaft=null,ladderMeshes=[],goldItems=[],trolls=[],exitOpen=false,exitGroup=null,floorMesh=null;
-const ladMap=new Map();
+const ladMap=new Map(),floorIdx=new Map(),holes=new Map();
+const pitMat=new THREE.MeshStandardMaterial({map:dirtTex,roughness:1,side:THREE.BackSide,color:0x8a7a6a});
 const isOpen=(f,x,z)=>L&&f>=0&&f<L.F&&x>=0&&z>=0&&x<L.W&&z<L.W&&L.g[f][z*L.W+x]!='#';
 const cw=(x,z)=>[OX+(x-L.start[0])*CELL,OZ+(z-L.start[1])*CELL];
 const wc=(wx,wz)=>[L.start[0]+Math.round((wx-OX)/CELL),L.start[1]+Math.round((wz-OZ)/CELL)];
@@ -158,7 +162,7 @@ function instanced(geo,mat,list){const m=new THREE.InstancedMesh(geo,mat,Math.ma
 function disposeGroup(g){if(!g)return;g.traverse(o=>{if(o.geometry)o.geometry.dispose()});g.parent&&g.parent.remove(g)}
 function buildLevel(n,hx,hz){
   disposeGroup(mine);disposeGroup(shaft);
-  L=genLevel(n);OX=hx;OZ=hz;ladMap.clear();ladderMeshes=[];goldItems=[];trolls=[];exitOpen=false;
+  L=genLevel(n);OX=hx;OZ=hz;ladMap.clear();floorIdx.clear();holes.clear();ladderMeshes=[];goldItems=[];trolls=[];exitOpen=false;
   L.lad.forEach((arr,f)=>arr.forEach(([x,z])=>{const v={top:f,bottom:f+1,x,z};ladMap.set(f+','+x+','+z,v);ladMap.set((f+1)+','+x+','+z,v)}));
   mine=new THREE.Group();shaft=new THREE.Group();scene.add(mine,shaft);
   const fl=[],ce=[],wa=[],band=[],posts=[];
@@ -167,7 +171,7 @@ function buildLevel(n,hx,hz){
   for(let f=0;f<L.F;f++){const y=floorY(f);
     for(let z=0;z<L.W;z++)for(let x=0;x<L.W;x++){if(!isOpen(f,x,z))continue;const[wx,wz]=cw(x,z);const la=ladderAt(x,z,f);
       const isExit=f==L.F-1&&x==L.exit[0]&&z==L.exit[1],isStart=f==0&&x==L.start[0]&&z==L.start[1];
-      if(!(la&&la.top==f)&&!isExit)fl.push(M([wx,y,wz],qF));
+      if(!(la&&la.top==f)&&!isExit){floorIdx.set(f+','+x+','+z,fl.length);fl.push(M([wx,y,wz],qF))}
       if(!(la&&la.bottom==f)&&!isStart)ce.push(M([wx,y+WALL_H,wz],qC));
       for(const[dx,dz,ry]of dirs)if(!isOpen(f,x+dx,z+dz))wa.push(M([wx+dx*CELL/2,y+WALL_H/2,wz+dz*CELL/2],Q(0,ry,0)));
       if(la&&la.top==f){const y2=floorY(f+1)+WALL_H,h=y-y2;for(const[dx,dz,ry]of dirs)band.push(M([wx+dx*CELL/2,y2+h/2,wz+dz*CELL/2],Q(0,ry,0),[1,h,1]))}
@@ -246,10 +250,10 @@ const fadeMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opaci
 const fade=new THREE.Mesh(new THREE.SphereGeometry(.25,16,12),fadeMat);fade.renderOrder=998;camera.add(fade);
 const rc=$('radar2d'),rg=rc.getContext('2d');const rtex=new THREE.CanvasTexture(rc);rtex.colorSpace=THREE.SRGBColorSpace;
 const radar=new THREE.Group();
-{const face=new THREE.Mesh(new THREE.CircleGeometry(.055,40),new THREE.MeshBasicMaterial({map:rtex}));face.position.y=.006;face.rotation.x=-Math.PI/2;radar.add(face);
- const rim=new THREE.Mesh(new THREE.CylinderGeometry(.062,.062,.012,40),new THREE.MeshStandardMaterial({color:0x8a6a3a,metalness:.7,roughness:.4}));radar.add(rim);
+{const face=new THREE.Mesh(new THREE.CircleGeometry(.07,48),new THREE.MeshBasicMaterial({map:rtex,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-4}));face.position.y=.009;face.rotation.x=-Math.PI/2;radar.add(face);
+ const rim=new THREE.Mesh(new THREE.CylinderGeometry(.078,.078,.01,48),new THREE.MeshStandardMaterial({color:0x8a6a3a,metalness:.7,roughness:.4}));radar.add(rim);
  const strap=new THREE.Mesh(new THREE.TorusGeometry(.045,.012,8,24),new THREE.MeshStandardMaterial({color:0x3a2416,roughness:.9}));strap.rotation.y=Math.PI/2;strap.position.y=-.04;radar.add(strap)}
-radar.position.set(0,.03,.1);radar.rotation.x=.5;
+radar.position.set(0,.035,.11);radar.rotation.x=.55;rtex.generateMipmaps=false;rtex.minFilter=THREE.LinearFilter;
 
 /* ================= lyd ================= */
 let ac=null;
@@ -260,7 +264,7 @@ function noise(d,f=800,v=.2){if(!ac)return;const b=ac.createBuffer(1,ac.sampleRa
   const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=f;g.gain.value=v;s.connect(fl).connect(g).connect(ac.destination);s.start()}
 const SND={gold:()=>{tone(880,1760,.12);setTimeout(()=>tone(1320,2640,.15),70)},hurt:()=>{tone(300,60,.6,'sawtooth',.12);noise(.4,500,.2)},
   open:()=>{tone(392,1568,.5);setTimeout(()=>tone(523,2093,.6,'triangle'),200)},fall:()=>noise(1.6,1400,.25),rumble:()=>noise(2.5,180,.5),
-  drip:()=>tone(1800+Math.random()*900,600,.12,'sine',.05),growl:()=>tone(90,55,.5,'sawtooth',.05)};
+  drip:()=>tone(1800+Math.random()*900,600,.12,'sine',.05),dig:()=>{noise(.35,900,.35);tone(160,70,.2,'triangle',.12)},clank:()=>tone(1200,900,.08,'square',.05),trap:()=>{tone(220,110,.4,'sawtooth',.08)},thud:()=>noise(.6,150,.5),growl:()=>tone(90,55,.5,'sawtooth',.05)};
 
 /* ================= spiller-tilstand ================= */
 let state='menu',mode='desktop',isAR=false,level=0,lives=5,goldGot=0,goldTotal=0,totalGold=0,stT=0,pf=0,graceT=0,growlT=0,dripT=3;
@@ -273,8 +277,10 @@ function turn(a){rig.updateMatrixWorld();const h=headWorld();rig.rotation.y+=a;r
 function cellOfHead(){const h=headWorld();return wc(h.x,h.z)}
 function nearestFloor(y){return Math.max(0,Math.min(L.F-1,Math.round((BASE-y)/FLOOR_H)))}
 function climbing(){return Math.abs(rig.position.y-floorY(nearestFloor(rig.position.y)))>.25}
+function walkable(f,x,z){if(!isOpen(f,x,z))return false;const h=holes.get(f+','+x+','+z);return!h||!!h.troll}
 function openAt(f,wx,wz){const[x,z]=wc(wx,wz);return isOpen(f,x,z)}
-function freeAt(f,wx,wz){for(const[ox,oz]of[[RADIUS,RADIUS],[-RADIUS,RADIUS],[RADIUS,-RADIUS],[-RADIUS,-RADIUS]])if(!openAt(f,wx+ox,wz+oz))return false;return true}
+function walkAt(f,wx,wz){const[x,z]=wc(wx,wz);return walkable(f,x,z)}
+function freeAt(f,wx,wz){for(const[ox,oz]of[[RADIUS,RADIUS],[-RADIUS,RADIUS],[RADIUS,-RADIUS],[-RADIUS,-RADIUS]])if(!walkAt(f,wx+ox,wz+oz))return false;return true}
 function moveBy(dx,dz){if(climbing())return;const h=headWorld();
   if(freeAt(pf,h.x+dx,h.z))rig.position.x+=dx;else if(freeAt(pf,h.x+dx*.3,h.z))rig.position.x+=dx*.3;
   headWorld(h);if(freeAt(pf,h.x,h.z+dz))rig.position.z+=dz;else if(freeAt(pf,h.x,h.z+dz*.3))rig.position.z+=dz*.3}
@@ -286,8 +292,14 @@ const ctrls=[];
 for(let i=0;i<2;i++){const c=renderer.xr.getController(i),g=renderer.xr.getControllerGrip(i);rig.add(c,g);
   const o={c,g,hand:null,gp:null,grab:false,lastY:0,aim:false};ctrls.push(o);
   const glove=new THREE.Mesh(new THREE.BoxGeometry(.07,.04,.13),new THREE.MeshStandardMaterial({color:0x6a4a2c,roughness:.9}));glove.position.z=.02;g.add(glove);
-  c.addEventListener('connected',e=>{o.hand=e.data.handedness;o.gp=e.data.gamepad;if(o.hand=='left')g.add(radar)});
+  c.addEventListener('connected',e=>{o.hand=e.data.handedness;o.gp=e.data.gamepad;if(o.hand=='left')g.add(radar);if(o.hand=='right')g.add(pick)});
   c.addEventListener('disconnected',()=>{o.gp=null})}
+const pick=new THREE.Group();{const wd=new THREE.Mesh(new THREE.CylinderGeometry(.018,.022,.55,8),MAT.wood);wd.rotation.x=Math.PI/2;wd.position.z=-.2;pick.add(wd);
+  const mt=new THREE.MeshStandardMaterial({color:0x9aa3ad,metalness:.9,roughness:.35});
+  const hd=new THREE.Mesh(new THREE.ConeGeometry(.03,.32,8),mt);hd.rotation.x=0;hd.position.set(0,.13,-.45);pick.add(hd);const hd2=hd.clone();hd2.rotation.z=Math.PI;hd2.position.y=-.1;pick.add(hd2)}
+let swingT=0;
+const digMark=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.PlaneGeometry(CELL*.9,CELL*.9)),new THREE.LineBasicMaterial({color:0xff9a3a}));digMark.rotation.x=-Math.PI/2;digMark.visible=false;scene.add(digMark);
+let digTarget=null;
 const rayGeo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3(0,0,-1)]);
 const ray=new THREE.Line(rayGeo,new THREE.LineBasicMaterial({color:0x7dff9a}));ray.visible=false;scene.add(ray);
 const marker=new THREE.Mesh(new THREE.RingGeometry(.25,.33,32),new THREE.MeshBasicMaterial({color:0x7dff9a,side:THREE.DoubleSide}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker);
@@ -310,13 +322,32 @@ function openExit(){exitOpen=true;SND.open();exitGroup.getObjectByName('lid').vi
 function nextLevel(){state='between';stT=0;SND.fall()}
 function caught(){lives--;SND.hurt();state='hurt';stT=0;fadeMat.color.set(0x880000)}
 function respawn(){const[wx,wz]=cw(...L.start);rig.position.y=floorY(0);pf=0;setHeadXZ(wx,wz);
-  for(const t of trolls){const u=t.userData;u.f=u.sf;u.x=u.sx;u.z=u.sz;u.from=u.to=null;u.p=1;const[x,z]=cw(u.x,u.z);t.position.set(x,floorY(u.f),z)}
+  for(const t of trolls){const u=t.userData;u.f=u.sf;u.x=u.sx;u.z=u.sz;u.from=u.to=null;u.p=1;u.trap=0;u.inPit=false;u.fromPit=false;for(const h of holes.values())h.troll=null;const[x,z]=cw(u.x,u.z);t.position.set(x,floorY(u.f),z)}
   graceT=3;state='play';fadeMat.color.set(0);say(`${lives} liv igjen`,2000)}
 function surface(win){state='end';stT=0;mine.visible=false;shaft.visible=false;room.visible=true;vrFloor.visible=!isAR;hatch.visible=true;doors.forEach(d=>d.rotation.z=0);
   rig.position.y=0;crack.material.color.set(win?0x7dff9a:0x555555);renderer.setClearColor(0x000000,isAR?0:1);scene.fog.density=isAR?0:.03;fadeMat.opacity=0;
   if(win){say('Du er tilbake i stua!',1e9,`${totalGold} gullklumper fra ${NLEV} nivåer\nTrykk A / avtrekker for ny runde`);SND.open()}
   else say('Trollene tok deg',1e9,`Du kom til nivå ${level+1} med ${totalGold} gull\nTrykk A / avtrekker for ny runde`)}
 
+/* ================= graving ================= */
+function trollCell(t){const u=t.userData;return u.to&&u.p>.5?u.to:[u.f,u.x,u.z]}
+function canDig(f,x,z){if(!L||!isOpen(f,x,z)||holes.has(f+','+x+','+z)||!floorIdx.has(f+','+x+','+z))return false;
+  if(ladderAt(x,z,f))return false;if(f==0&&x==L.start[0]&&z==L.start[1])return false;
+  const[px,pz]=cellOfHead();if(f!=pf||climbing()||Math.abs(px-x)+Math.abs(pz-z)!=1)return false;
+  if(goldItems.some(g=>g.visible&&g.userData.f==f&&g.userData.x==x&&g.userData.z==z))return false;
+  if(trolls.some(t=>{const c=trollCell(t);return c[0]==f&&c[1]==x&&c[2]==z}))return false;return true}
+function dig(f,x,z){if(!canDig(f,x,z)){SND.clank();return false}
+  const k=f+','+x+','+z,i=floorIdx.get(k),[wx,wz]=cw(x,z),y=floorY(f);
+  floorMesh.setMatrixAt(i,M([wx,y,wz],Q(-Math.PI/2,0,0),[0,0,0]));floorMesh.instanceMatrix.needsUpdate=true;
+  const pit=new THREE.Mesh(new THREE.BoxGeometry(CELL-.02,PIT,CELL-.02),pitMat);pit.position.set(wx,y-PIT/2,wz);mine.add(pit);
+  const fill=new THREE.Mesh(new THREE.PlaneGeometry(CELL,CELL),MAT.floor);fill.rotation.x=-Math.PI/2;fill.position.set(wx,y-PIT+.02,wz);mine.add(fill);
+  holes.set(k,{f,x,z,t:0,troll:null,pit,fill,i});SND.dig();return true}
+function updHoles(dt){for(const[k,h]of holes){h.t+=dt;const[wx,wz]=cw(h.x,h.z),y=floorY(h.f);
+    const k2=Math.max(0,(h.t-(HOLE_T-1.2))/1.2);h.fill.position.y=y-PIT+.02+k2*(PIT-.03);
+    if(h.t>=HOLE_T){floorMesh.setMatrixAt(h.i,M([wx,y,wz],Q(-Math.PI/2,0,0)));floorMesh.instanceMatrix.needsUpdate=true;
+      disposeGroup(h.pit);disposeGroup(h.fill);holes.delete(k);
+      if(h.troll){const u=h.troll.userData;u.trap=0;u.inPit=false;u.f=u.sf;u.x=u.sx;u.z=u.sz;u.from=u.to=null;u.p=1;const[sx,sz]=cw(u.x,u.z);h.troll.position.set(sx,floorY(u.f),sz);SND.thud();say('Trollet ble begravd!',1500)}
+      const[px,pz]=cellOfHead();if(h.f==pf&&h.x==px&&h.z==pz)caught()}}}
 /* ================= troll-AI ================= */
 function nbrs(f,x,z){const r=[];for(const[dx,dz]of[[1,0],[-1,0],[0,1],[0,-1]])if(isOpen(f,x+dx,z+dz))r.push([f,x+dx,z+dz]);
   const la=ladderAt(x,z,f);if(la){r.push([la.top==f?la.bottom:la.top,x,z])}return r}
@@ -326,17 +357,23 @@ function nextStep(u,tgt){const k=a=>a.join(','),s=k([u.f,u.x,u.z]),goal=k(tgt);i
 function updTrolls(dt){const[px,pz]=cellOfHead(),tgt=[pf,px,pz],sp=.95+level*.11;const h=headWorld();
   let near=99;
   for(const t of trolls){const u=t.userData;
-    if(u.p>=1){if(u.to){[u.f,u.x,u.z]=u.to;u.to=null}
+    if(u.trap>0){u.trap-=dt;t.position.x+=Math.sin(performance.now()/40)*.004;
+      if(u.trap<=0){const opts=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>[u.f,u.x+dx,u.z+dz]).filter(c=>walkable(...c)&&!holes.has(c.join()));
+        if(opts.length){opts.sort((a,b)=>(Math.abs(a[1]-px)+Math.abs(a[2]-pz))-(Math.abs(b[1]-px)+Math.abs(b[2]-pz)));
+          const hh=holes.get([u.f,u.x,u.z].join());if(hh)hh.troll=null;u.from=[u.f,u.x,u.z];u.to=opts[0];u.p=0;u.fromPit=true;u.inPit=false}else u.trap=1}
+      continue}
+    if(u.p>=1){if(u.to){[u.f,u.x,u.z]=u.to;u.to=null;u.fromPit=false;
+        const hh=holes.get([u.f,u.x,u.z].join());if(hh&&!hh.troll){hh.troll=t;u.trap=3.8;u.inPit=true;t.position.y=floorY(u.f)-PIT+.08;SND.trap();continue}}
       if(graceT<=0){const n=nextStep(u,tgt);if(n&&!trolls.some(o=>o!==t&&((o.userData.to&&o.userData.to.join()==n.join())||(!o.userData.to&&o.userData.f==n[0]&&o.userData.x==n[1]&&o.userData.z==n[2])))){u.from=[u.f,u.x,u.z];u.to=n;u.p=0}}}
     if(u.to){const vert=u.to[0]!=u.from[0];u.p=Math.min(1,u.p+dt*(vert?.55:sp)/(vert?FLOOR_H:CELL));
-      const[ax,az]=cw(u.from[1],u.from[2]),[bx,bz]=cw(u.to[1],u.to[2]),ay=floorY(u.from[0]),by=floorY(u.to[0]);
+      const[ax,az]=cw(u.from[1],u.from[2]),[bx,bz]=cw(u.to[1],u.to[2]),ay=floorY(u.from[0])-(u.fromPit?PIT-.08:0),by=floorY(u.to[0]);
       t.position.set(ax+(bx-ax)*u.p,ay+(by-ay)*u.p,az+(bz-az)*u.p);
       if(!vert&&(bx!=ax||bz!=az))t.rotation.y=Math.atan2(bx-ax,bz-az);
       const w=performance.now()/140;t.userData.body.getObjectByName('leg-1').rotation.x=Math.sin(w)*.5;t.userData.body.getObjectByName('leg1').rotation.x=-Math.sin(w)*.5;
       t.userData.body.getObjectByName('arm-1').rotation.x=-Math.sin(w)*.6;t.userData.body.getObjectByName('arm1').rotation.x=Math.sin(w)*.6;t.userData.body.position.y=Math.abs(Math.sin(w))*.05}
     const dx=t.position.x-h.x,dz=t.position.z-h.z,d=Math.hypot(dx,dz),dy=Math.abs(t.position.y-rig.position.y);
-    if(dy<1.6){near=Math.min(near,d);if(d<.7&&state=='play'){caught();return}}
-    if(dy<1.6&&d<6&&state=='play'){t.lookAt(h.x,t.position.y,h.z)}}
+    if(dy<1.6&&!u.inPit&&!u.fromPit){near=Math.min(near,d);if(d<.7&&state=='play'){caught();return}}
+    if(dy<1.6&&d<6&&state=='play'&&!u.to){t.lookAt(h.x,t.position.y,h.z)}}
   growlT-=dt;if(near<5&&growlT<=0){SND.growl();growlT=1.2+near*.4}}
 
 /* ================= radar ================= */
@@ -374,7 +411,8 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
     if(stT>.7){totalGold+=goldGot;level++;lives=Math.min(9,lives+1);
       if(level>=NLEV){surface(true)}else{const h=headWorld();buildLevel(level,h.x,h.z);dropIn(floorY(0)+5);fadeMat.opacity=.8}}}
   else if(state=='hurt'){fadeMat.opacity=Math.min(.7,stT*2);if(stT>1.2){if(lives<=0){totalGold+=goldGot;surface(false)}else respawn()}}
-  if(state=='play'){graceT-=dt;input(dt);
+  if(state=='pause'){menuInput()}
+  if(state=='play'){graceT-=dt;input(dt);updHoles(dt);menuButtons();
     const[cx,cz]=cellOfHead();if(!climbing()){pf=nearestFloor(rig.position.y);const la=ladderAt(cx,cz,pf);if(!la)rig.position.y=floorY(pf)}
     const h=headWorld();fadeMat.opacity=openAt(pf,h.x,h.z)?0:.92;fadeMat.color.set(0);
     const hands=ctrls.filter(o=>o.gp).map(o=>o.g.getWorldPosition(new THREE.Vector3()));
@@ -392,7 +430,11 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
 
 /* ================= input ================= */
 function input(dt){
-  if(mode=='desktop'){const sp=3*dt;let mx=0,mz=0;if(keys.has('KeyW')||keys.has('ArrowUp'))mz-=1;if(keys.has('KeyS')||keys.has('ArrowDown'))mz+=1;if(keys.has('KeyA'))mx-=1;if(keys.has('KeyD'))mx+=1;
+  if(swingT>0){swingT-=dt;pick.rotation.x=-Math.sin((.35-swingT)/.35*Math.PI)*1.3}else pick.rotation.x=0;
+  if(mode=='desktop'){const sp=3*dt;
+    if(keys.has('KeyF')&&!keys.has('_f')){keys.add('_f');const dx=Math.round(-Math.sin(yaw)),dz=Math.round(-Math.cos(yaw));const[px,pz]=cellOfHead();
+      const ax=Math.abs(Math.sin(yaw))>Math.abs(Math.cos(yaw));dig(pf,px+(ax?Math.sign(-Math.sin(yaw)):0),pz+(ax?0:Math.sign(-Math.cos(yaw))))}
+    if(!keys.has('KeyF'))keys.delete('_f');let mx=0,mz=0;if(keys.has('KeyW')||keys.has('ArrowUp'))mz-=1;if(keys.has('KeyS')||keys.has('ArrowDown'))mz+=1;if(keys.has('KeyA'))mx-=1;if(keys.has('KeyD'))mx+=1;
     if(keys.has('ArrowLeft'))yaw+=dt*2;if(keys.has('ArrowRight'))yaw-=dt*2;rig.rotation.y=yaw;camera.rotation.set(pitch,0,0);
     if(mx||mz){const c=Math.cos(yaw),s=Math.sin(yaw),l=Math.hypot(mx,mz);moveBy((mx*c+mz*s)/l*sp,(-mx*s+mz*c)/l*sp)}
     if(keys.has('Space'))climb(1.6*dt);if(keys.has('KeyC')||keys.has('ControlLeft'))climb(-1.6*dt);return}
@@ -407,24 +449,59 @@ function input(dt){
           o.grab=true;grabbing=true}else o.grab=false}else o.grab=false}else o.grab=false;o.lastY=ly}
   if(!grabbing&&climbing()){const top=floorY(nearestFloor(rig.position.y));if(Math.abs(rig.position.y-top)<.6)rig.position.y+=(top-rig.position.y)*Math.min(1,dt*4)}
   if(R_){const[rx,ry]=axes(R_.gp);
-    if(Math.abs(rx)>.7&&!snapLock&&!(mode=='tele'&&R_.aim)){turn(-Math.sign(rx)*Math.PI/6);snapLock=true}if(Math.abs(rx)<.3)snapLock=false;
+    if(!(mode=='tele'&&R_.aim)){if(snapTurn){if(Math.abs(rx)>.7&&!snapLock){turn(-Math.sign(rx)*Math.PI/6);snapLock=true}if(Math.abs(rx)<.3)snapLock=false}
+      else if(Math.abs(rx)>.15){const v=(Math.abs(rx)-.15)/.85;turn(-Math.sign(rx)*v*v*2.2*dt)}}
+    aimDig(R_);if(hit(R_,0)&&digTarget){dig(...digTarget);swingT=.35;try{R_.gp.hapticActuators&&R_.gp.hapticActuators[0]&&R_.gp.hapticActuators[0].pulse(.8,90)}catch(e){}}
     if(mode=='smooth'){if(Math.abs(ry)>.4)climb(-ry*1.6*dt)}
     else{if(ry<-.6){R_.aim=true;aimTele(R_)}else if(R_.aim&&ry>-.3){R_.aim=false;doTele();ray.visible=marker.visible=false}}}
   if(L_&&mode=='smooth'){const[lx,ly]=axes(L_.gp);if(Math.hypot(lx,ly)>.15){const sp=2.2*dt;moveBy((fwd.x*-ly+right.x*lx)*sp,(fwd.z*-ly+right.z*lx)*sp)}}
 }
+function hit(o,i){const p=btn(o.gp,i),w=o['p'+i];o['p'+i]=p;return p&&!w}
+function aimDig(o){digTarget=null;digMark.visible=false;if(o.aim||climbing())return;const c=o.c,p=c.getWorldPosition(new THREE.Vector3()),q=c.getWorldQuaternion(new THREE.Quaternion());
+  const d=new THREE.Vector3(0,0,-1).applyQuaternion(q);if(d.y>-.2)return;raycaster.set(p,d);raycaster.far=4;const hs=raycaster.intersectObject(floorMesh);if(!hs[0])return;
+  const[x,z]=wc(hs[0].point.x,hs[0].point.z);if(!canDig(pf,x,z))return;digTarget=[pf,x,z];const[wx,wz]=cw(x,z);digMark.position.set(wx,floorY(pf)+.03,wz);digMark.visible=true}
+/* ---------- meny ---------- */
+let snapTurn=false,menuSel=-1,pausedFrom='play';
+const mc=document.createElement('canvas');mc.width=1024;mc.height=1024;const mg=mc.getContext('2d');const mtex=new THREE.CanvasTexture(mc);mtex.colorSpace=THREE.SRGBColorSpace;
+const menuPanel=new THREE.Mesh(new THREE.PlaneGeometry(.8,.8),new THREE.MeshBasicMaterial({map:mtex,transparent:true,depthTest:false,fog:false}));menuPanel.renderOrder=1000;menuPanel.visible=false;scene.add(menuPanel);
+const MENU=()=>[['Fortsett',()=>closeMenu()],['Start nivået på nytt',()=>{closeMenu();restartLevel()}],
+  [`Bevegelse: ${mode=='tele'?'teleport':'styrespak'}`,()=>{mode=mode=='tele'?'smooth':'tele';drawMenu()}],
+  [`Sving: ${snapTurn?'i hakk':'myk'}`,()=>{snapTurn=!snapTurn;drawMenu()}],['Avslutt spillet',()=>{const s=renderer.xr.getSession();if(s)s.end()}]];
+function drawMenu(){mg.clearRect(0,0,1024,1024);mg.fillStyle='rgba(18,12,9,.92)';mg.beginPath();mg.roundRect(8,8,1008,1008,40);mg.fill();mg.strokeStyle='#f6c64a';mg.lineWidth=5;mg.stroke();
+  mg.textAlign='center';mg.fillStyle='#f6c64a';mg.font='bold 72px system-ui,sans-serif';mg.fillText('Pause',512,120);
+  mg.fillStyle='#f3e6d0';mg.font='34px system-ui,sans-serif';mg.fillText(`Nivå ${level+1} · Gull ${goldGot}/${goldTotal} · Liv ${lives}`,512,180);
+  MENU().forEach(([t],i)=>{const y=230+i*150;mg.fillStyle=i==menuSel?'#f6c64a':'#3a2a20';mg.beginPath();mg.roundRect(120,y,784,120,24);mg.fill();
+    mg.fillStyle=i==menuSel?'#2a1c14':'#f3e6d0';mg.font='bold 52px system-ui,sans-serif';mg.fillText(t,512,y+78)});mtex.needsUpdate=true}
+function openMenu(){if(state!='play'&&state!='hurt')return;pausedFrom=state;state='pause';menuSel=-1;
+  const h=headWorld(),dir=camera.getWorldDirection(new THREE.Vector3());dir.y=0;dir.normalize();menuPanel.position.set(h.x+dir.x*1.1,h.y-.1,h.z+dir.z*1.1);
+  menuPanel.lookAt(h.x,h.y-.1,h.z);drawMenu();menuPanel.visible=true;digMark.visible=marker.visible=false}
+function closeMenu(){menuPanel.visible=false;ray.visible=false;state=pausedFrom}
+function menuButtons(){for(const o of ctrls)if(o.gp&&(hit(o,4)&&o.hand=='left'||hit(o,5)))openMenu()}
+function menuInput(){if(mode=='desktop')return;let sel=-1,click=false;
+  for(const o of ctrls){if(!o.gp)continue;if(hit(o,5)||(o.hand=='left'&&hit(o,4))){closeMenu();return}
+    const p=o.c.getWorldPosition(new THREE.Vector3()),q=o.c.getWorldQuaternion(new THREE.Quaternion());raycaster.set(p,new THREE.Vector3(0,0,-1).applyQuaternion(q));raycaster.far=5;
+    const hs=raycaster.intersectObject(menuPanel);if(hs[0]&&o.hand=='right'||hs[0]&&sel<0){const uv=hs[0].uv,py=(1-uv.y)*1024,i=Math.floor((py-230)/150);if(i>=0&&i<5&&(py-230)%150<120&&uv.x>.12&&uv.x<.88)sel=i;
+      if(o.hand=='right'||!ctrls.some(c=>c.hand=='right'&&c.gp)){ray.visible=true;ray.geometry.setFromPoints([p,hs[0].point]);ray.material.color.set(0xf6c64a)}}
+    if(hit(o,0)&&sel>=0)click=true}
+  if(sel!=menuSel){menuSel=sel;drawMenu()}if(click){const a=MENU()[sel];a&&a[1]()}}
+function restartLevel(){const h=headWorld();buildLevel(level,h.x,h.z);dropIn(floorY(0)+5);fadeMat.opacity=.8}
 function aimTele(o){const c=o.c;const p=c.getWorldPosition(new THREE.Vector3()),q=c.getWorldQuaternion(new THREE.Quaternion());
   const d=new THREE.Vector3(0,0,-1).applyQuaternion(q);d.y-=.25;d.normalize();raycaster.set(p,d);raycaster.far=12;
   const hits=raycaster.intersectObjects([floorMesh,...ladderMeshes,exitGroup],true);teleTarget=null;
   ray.visible=true;const end=hits[0]?hits[0].point:p.clone().addScaledVector(d,8);ray.geometry.setFromPoints([p,end]);
   if(hits[0]){const ht=hits[0];let lad=null;let o2=ht.object;while(o2&&!lad){lad=o2.userData&&o2.userData.lad;o2=o2.parent}
-    if(lad){teleTarget={lad};marker.visible=false;ray.material.color.set(0xffd23a);return}
-    const f=nearestFloor(ht.point.y),ok=f==pf&&!climbing()&&Math.abs(ht.point.y-floorY(f))<.2;
-    if(ok){teleTarget={x:ht.point.x,z:ht.point.z};marker.position.set(ht.point.x,ht.point.y+.02,ht.point.z);marker.visible=true;ray.material.color.set(0x7dff9a)}
+    const[px,pz]=cellOfHead();
+    if(lad){const near=Math.abs(lad.x-px)+Math.abs(lad.z-pz)<=1,toF=pf==lad.top?lad.bottom:lad.top,blocked=trolls.some(t=>{const c=trollCell(t);return c[0]==toF&&c[1]==lad.x&&c[2]==lad.z});
+      if(near&&!blocked&&(pf==lad.top||pf==lad.bottom)){teleTarget={lad};ray.material.color.set(0xffd23a)}else ray.material.color.set(0xff5040);marker.visible=false;return}
+    const f=nearestFloor(ht.point.y),[tx,tz]=wc(ht.point.x,ht.point.z);let ok=f==pf&&!climbing()&&Math.abs(ht.point.y-floorY(f))<.2&&(tx==px||tz==pz)&&!(tx==px&&tz==pz);
+    if(ok){const n=Math.abs(tx-px)+Math.abs(tz-pz),sx=Math.sign(tx-px),sz=Math.sign(tz-pz);if(n>4)ok=false;
+      for(let i=1;i<=n&&ok;i++){const cx=px+sx*i,cz=pz+sz*i;if(!walkable(f,cx,cz))ok=false;if(trolls.some(t=>{const c=trollCell(t),u=t.userData;return!u.inPit&&c[0]==f&&Math.abs(c[1]-cx)+Math.abs(c[2]-cz)<=(i==n?1:0)}))ok=false}}
+    if(ok){const[cx,cz]=cw(tx,tz);teleTarget={x:cx,z:cz};marker.position.set(cx,floorY(f)+.02,cz);marker.visible=true;ray.material.color.set(0x7dff9a)}
     else{marker.visible=false;ray.material.color.set(0xff5040)}}
   else{marker.visible=false;ray.material.color.set(0xff5040)}}
 function doTele(){if(!teleTarget)return;fadeMat.opacity=.8;setTimeout(()=>{fadeMat.opacity=0},90);
   if(teleTarget.lad){const la=teleTarget.lad,[lx,lz]=cw(la.x,la.z),toF=pf==la.top?la.bottom:la.top;rig.position.y=floorY(toF);pf=toF;setHeadXZ(lx,lz)}
-  else{const[x,z]=wc(teleTarget.x,teleTarget.z),[cx,cz]=cw(x,z);setHeadXZ(cx+(teleTarget.x-cx)*.6,cz+(teleTarget.z-cz)*.6)}teleTarget=null}
+  else setHeadXZ(teleTarget.x,teleTarget.z);teleTarget=null}
 
 /* ================= start ================= */
 let supAR=false;
@@ -437,14 +514,15 @@ async function startXR(m){audio();mode=m;isAR=supAR;const type=isAR?'immersive-a
     s.addEventListener('end',()=>{state='menu';$('menu').classList.remove('hide');renderer.setClearColor(0,1);camera.position.set(0,1.6,0)});
     beginRun()}catch(e){$('xrnote').textContent='Kunne ikke starte VR: '+(e&&e.message||e)}}
 $('bSmooth').onclick=()=>startXR('smooth');
+$('bResume').onclick=()=>{$('bResume').hidden=true;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';state=pausedFrom;try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}};
 $('bTele').onclick=()=>startXR('tele');
-$('bPC').onclick=()=>{audio();mode='desktop';isAR=false;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';
+$('bPC').onclick=()=>{audio();$('bResume').hidden=true;mode='desktop';isAR=false;$('menu').classList.add('hide');rc.style.display='block';$('hint').style.display='block';$('cross').style.display='block';
   camera.position.set(0,1.6,0);yaw=0;pitch=0;beginRun();try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}};
 renderer.domElement.addEventListener('click',()=>{if(mode=='desktop'&&state!='menu')try{const pr=renderer.domElement.requestPointerLock();pr&&pr.catch&&pr.catch(()=>{})}catch(e){}});
 addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement){yaw-=e.movementX*.0025;pitch=Math.max(-1.3,Math.min(1.3,pitch-e.movementY*.0025))}});
-addEventListener('keydown',e=>{keys.add(e.code);if(e.code=='Escape'&&mode=='desktop'&&!renderer.xr.isPresenting){state='menu';$('menu').classList.remove('hide');rc.style.display='none';$('hint').style.display='none';$('cross').style.display='none'}});
+addEventListener('keydown',e=>{keys.add(e.code);if(e.code=='Escape'&&mode=='desktop'&&!renderer.xr.isPresenting){if(state=='play'){pausedFrom='play';$('bResume').hidden=false}state='pause';$('menu').classList.remove('hide');rc.style.display='none';$('hint').style.display='none';$('cross').style.display='none'}});
 addEventListener('keyup',e=>keys.delete(e.code));
-window.__dbg={goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
+window.__dbg={dig,get holes(){return holes},openMenu,goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
 if(navigator.xr){Promise.all([navigator.xr.isSessionSupported('immersive-vr').catch(()=>false),navigator.xr.isSessionSupported('immersive-ar').catch(()=>false)]).then(([vr,ar])=>{
   const ok=vr||ar;supAR=ar;$('bSmooth').disabled=$('bTele').disabled=!ok;
   $('xrnote').textContent=ok?(ar?'Klar for VR. Du starter i stua med kamera-gjennomsyn.':'Klar for VR.'):'VR er ikke tilgjengelig her. Åpne siden i nettleseren på Meta Quest 3.'})}
