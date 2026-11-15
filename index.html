@@ -43,7 +43,7 @@ details ul{margin:8px 0 0;padding-left:18px}
       <button id="bResume" hidden>Fortsett</button>
       <button id="bPC" class="alt">Spill på PC (test)</button>
     </div>
-    <p class="note">Versjon 0.6</p>
+    <p class="note">Versjon 0.7</p>
     <p class="note" id="xrnote">Sjekker om VR er tilgjengelig …</p>
     <details>
       <summary>Slik spiller du i VR</summary>
@@ -51,7 +51,7 @@ details ul{margin:8px 0 0;padding-left:18px}
         <li><b>Styrespak-modus:</b> venstre spak går, høyre spak sidelengs snur mykt, høyre spak opp/ned klatrer i stiger.</li>
         <li><b>Grav:</b> pek hakka (høyre hånd) på gulvruta ved siden av deg og trykk avtrekkeren. Trollet faller i hullet og blir sittende fast en stund, og du kan gå over det.</li>
         <li><b>Tau over kløfter:</b> gå frem (styrespak) eller sikt over kløften (teleport), så henger du deg over. Du kan også holde grepknappen på tauet og dra deg hånd over hånd.</li>
-        <li><b>Gruvetralle:</b> stå i tralla og trykk A på høyre kontroll. Troll på skinnene blir dyttet bort.</li>
+        <li><b>Gruvetralle:</b> stå i tralla og trykk avtrekkeren (pekefinger) eller klikk ned styrespaken. Troll på skinnene blir dyttet bort.</li>
         <li><b>Meny/pause:</b> trykk Y eller X på venstre kontroll, eller B på høyre.</li>
         <li><b>Teleport-modus:</b> skyv høyre spak fremover, sikt på gulvet og slipp. Du kan hoppe opptil 4 ruter rett frem, men ikke forbi troll.</li>
         <li><b>Klatring:</b> stå ved stigen, hold inne grepknappen og trekk deg opp eller ned, hånd over hånd.</li>
@@ -75,14 +75,14 @@ const renderer=new THREE.WebGLRenderer({canvas:$('gl'),antialias:true,alpha:true
 renderer.setPixelRatio(Math.min(2,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);
 renderer.xr.enabled=true;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;renderer.setClearColor(0x000000,1);
 const scene=new THREE.Scene();
-scene.fog=new THREE.FogExp2(0x0a0705,0.07);
+scene.fog=new THREE.FogExp2(0x0a0705,0.05);
 const rig=new THREE.Group();scene.add(rig);
 const camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.05,80);
-camera.position.set(0,1.6,0);rig.add(camera);
+camera.position.set(0,1.6,0);const body=new THREE.Group();rig.add(body);body.add(camera);let seatOff=0;
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 
-scene.add(new THREE.AmbientLight(0x6a5a50,0.22));
-const lamp=new THREE.SpotLight(0xffe2b0,9,22,0.6,0.6,1.1);
+scene.add(new THREE.AmbientLight(0x6a5a50,0.32));
+const lamp=new THREE.SpotLight(0xffe2b0,12,26,0.85,0.75,1.05);
 lamp.position.set(0,0.12,0);camera.add(lamp);
 const lampT=new THREE.Object3D();lampT.position.set(0,0,-1);camera.add(lampT);lamp.target=lampT;
 const fill=new THREE.PointLight(0xffc890,.5,4,2);camera.add(fill);
@@ -167,7 +167,7 @@ function genLevel(n){
   const op=(f,a,b)=>a>=0&&b>=0&&a<W&&b<W&&g[f][b*W+a]!='#';
   const corr=(f,x,z,dx)=>op(f,x,z)&&(dx?op(f,x-1,z)&&op(f,x+1,z)&&!op(f,x,z-1)&&!op(f,x,z+1):op(f,x,z-1)&&op(f,x,z+1)&&!op(f,x-1,z)&&!op(f,x+1,z));
   for(let t=0;t<400&&ropes.length<NC;t++){const f=Math.floor(r()*F),x=1+Math.floor(r()*(W-2)),z=1+Math.floor(r()*(W-2)),dx=r()<.5;
-    if(!corr(f,x,z,dx))continue;const len=corr(f,x+(dx?1:0),z+(dx?0:1),dx)&&r()<.6?2:1,cells=[];for(let i=0;i<len;i++)cells.push([x+(dx?i:0),z+(dx?0:i)]);
+    if(!corr(f,x,z,dx))continue;let len=1;if(corr(f,x+(dx?1:0),z+(dx?0:1),dx)&&r()<.75){len=2;if(corr(f,x+(dx?2:0),z+(dx?0:2),dx)&&r()<.6)len=3}const cells=[];for(let i=0;i<len;i++)cells.push([x+(dx?i:0),z+(dx?0:i)]);
     const A=[x-(dx?1:0),z-(dx?0:1)],B=[cells[len-1][0]+(dx?1:0),cells[len-1][1]+(dx?0:1)];
     const bad=c=>used.has(key(f,...c))||chasm.has(key(f,...c))||(f==0&&c[0]==start[0]&&c[1]==start[1])||(f==F-1&&c[0]==exit[0]&&c[1]==exit[1]);
     if(cells.some(c=>bad(c)||(f<F-1&&g[f+1][c[1]*W+c[0]]!='#')||[[1,0],[-1,0],[0,1],[0,-1]].some(([a,b])=>chasm.has(key(f,c[0]+a,c[1]+b))))||bad(A)||bad(B))continue;
@@ -269,7 +269,7 @@ function buildLevel(n,hx,hz){
   L=genLevel(n);OX=hx;OZ=hz;ladMap.clear();floorIdx.clear();holes.clear();ladderMeshes=[];goldItems=[];trolls=[];exitOpen=false;
   L.lad.forEach((arr,f)=>arr.forEach(([x,z])=>{const v={top:f,bottom:f+1,x,z};ladMap.set(f+','+x+','+z,v);ladMap.set((f+1)+','+x+','+z,v)}));
   mine=new THREE.Group();shaft=new THREE.Group();scene.add(mine,shaft);
-  const fl=[],posts=[],R={pos:[],uv:[],idx:[]},CE={pos:[],uv:[],idx:[]},crates=[],barrels=[];lanterns=[];cages=[];
+  obst=[];barrelEnts=[];const barrelSpots=[];const fl=[],posts=[],R={pos:[],uv:[],idx:[]},CE={pos:[],uv:[],idx:[]},crates=[],barrels=[];lanterns=[];cages=[];
   const qF=Q(-Math.PI/2,0,0);const V=(x,y,z)=>new THREE.Vector3(x,y,z),UP=V(0,1,0);
   const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
   const wallQ=(P,cx,y0,cz,dx,dz,h,sv)=>{const n=V(-dx,0,-dz),ua=UP.clone().cross(n).multiplyScalar(CELL),c=V(cx+dx*CELL/2,y0,cz+dz*CELL/2);
@@ -289,18 +289,21 @@ function buildLevel(n,hx,hz){
       const hv=h3(x*7+f,z*13,f*31+5),special=la||isExit||isStart||ch||(L.ropes.some(r=>r.f==f&&((r.a[0]==x&&r.a[1]==z)||(r.b[0]==x&&r.b[1]==z))));
       if((ns||ew)&&!special){
         if((x+z+f)%3==0){const s=CELL/2-.38,ph=WALL_H-.45,rot=ns?0:Math.PI/2,ax=ns?[1,0]:[0,1];
+          obst.push({f,x:wx-ax[0]*s,z:wz-ax[1]*s,r:.16},{f,x:wx+ax[0]*s,z:wz+ax[1]*s,r:.16});
           posts.push(M([wx-ax[0]*s,y+ph/2,wz-ax[1]*s],Q(0,rot,(hv-.5)*.06),[1,ph,1]),M([wx+ax[0]*s,y+ph/2,wz+ax[1]*s],Q(0,rot,(hv-.5)*-.06),[1,ph,1]),
             M([wx,y+ph,wz],ns?Q(0,0,Math.PI/2):Q(Math.PI/2,0,0),[1.15,2*s+.3,1.15]))}
         else if(hv<.3)lanterns.push({f,x:wx+(ns?0:0),z:wz,y:y+WALL_H-.62,ph:hv*40});
         else if(hv>.93&&cages.length<(L.W>=11?2:1))cages.push({f,x:wx,z:wz,y:y+WALL_H-.55})}
       const deadEnd=dirs.filter(([dx,dz])=>!isOpen(f,x+dx,z+dz)).length==3;
       if(deadEnd&&!special&&!L.gold.some(g=>g[0]==f&&g[1]==x&&g[2]==z)&&!L.trolls.some(g=>g[0]==f&&g[1]==x&&g[2]==z)){const[ox,oz]=dirs.find(([dx,dz])=>isOpen(f,x+dx,z+dz));
-        const bx=wx-ox*.55,bz=wz-oz*.55;if(hv<.5){crates.push(M([bx+.2,y+.3,bz],Q(0,hv*3,0),[.6,.6,.6]));if(hv<.25)crates.push(M([bx-.25,y+.25,bz+.15],Q(0,hv*7,0),[.5,.5,.5]))}
-        else barrels.push(M([bx,y+.42,bz],Q(0,hv*5,0)),M([bx+.45*(oz?1:0),y+.42,bz+.45*(ox?1:0)],Q(0,hv*9,0)))}
+        const bx=wx-ox*.55,bz=wz-oz*.55;if(hv<.5){crates.push(M([bx+.2,y+.3,bz],Q(0,hv*3,0),[.6,.6,.6]));obst.push({f,x:bx+.2,z:bz,r:.42});if(hv<.25)obst.push({f,x:bx-.25,z:bz+.15,r:.36});if(hv<.25)crates.push(M([bx-.25,y+.25,bz+.15],Q(0,hv*7,0),[.5,.5,.5]))}
+        else{barrelSpots.push([f,bx,bz]);barrelSpots.push([f,bx+.62*(oz?1:0),bz+.62*(ox?1:0)])}}
+      else if(!special&&(ns||ew)&&hv>.86&&hv<.93)barrelSpots.push([f,wx+(ns?.5:0),wz+(ew?.5:0)])
     }}
   floorMesh=instanced(new THREE.PlaneGeometry(CELL,CELL),MAT.floor,fl);
   mine.add(floorMesh,meshFrom(R,MAT.wall),meshFrom(CE,MAT.ceil),instanced(new THREE.BoxGeometry(.22,1,.22),MAT.beam,posts),
-    instanced(new THREE.BoxGeometry(1,1,1),MAT.crate,crates),instanced(new THREE.CylinderGeometry(.28,.28,.84,12),MAT.barrel,barrels));
+    instanced(new THREE.BoxGeometry(1,1,1),MAT.crate,crates));
+  barrelSpots.sort((a,b)=>h3(a[1]*7|0,a[2]*7|0,a[0])-h3(b[1]*7|0,b[2]*7|0,b[0]));for(const[f,x,z]of barrelSpots.slice(0,6+Math.min(L.n,4)))makeBarrel(f,x,z);
   buildRails();buildLanterns();buildCages();
   for(const r of L.ropes){const y=floorY(r.f)+ROPE_Y,[ax,az]=cw(...r.a),[bx,bz]=cw(...r.b);r.A=new THREE.Vector3(ax,y,az);r.B=new THREE.Vector3(bx,y,bz);
     const mid=r.A.clone().lerp(r.B,.5);mid.y-=.18;const cv=new THREE.QuadraticBezierCurve3(r.A,mid,r.B);r.curve=cv;
@@ -374,6 +377,10 @@ function say(t,ms=3500,sub=''){pg.clearRect(0,0,1024,420);pg.fillStyle='rgba(18,
   const lines=t.split('\n');lines.forEach((l,i)=>pg.fillText(l,512,(sub?150:200)-(lines.length-1)*38+i*76));
   if(sub){pg.fillStyle='#f3e6d0';pg.font='38px system-ui,sans-serif';sub.split('\n').forEach((l,i)=>pg.fillText(l,512,280+i*50))}
   ptex.needsUpdate=true;panel.visible=true;panelT=ms}
+const vigTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const g=c.getContext('2d'),r=g.createRadialGradient(128,128,40,128,128,128);
+  r.addColorStop(0,'rgba(0,0,0,0)');r.addColorStop(.55,'rgba(0,0,0,0)');r.addColorStop(.85,'rgba(0,0,0,.85)');r.addColorStop(1,'rgba(0,0,0,1)');g.fillStyle=r;g.fillRect(0,0,256,256);return new THREE.CanvasTexture(c)})();
+const vig=new THREE.Mesh(new THREE.PlaneGeometry(.62,.62),new THREE.MeshBasicMaterial({map:vigTex,transparent:true,opacity:0,depthTest:false,depthWrite:false,fog:false}));vig.position.z=-.2;vig.renderOrder=997;camera.add(vig);
+let vigA=0;
 const fadeMat=new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:0,side:THREE.BackSide,depthTest:false});
 const fade=new THREE.Mesh(new THREE.SphereGeometry(.25,16,12),fadeMat);fade.renderOrder=998;camera.add(fade);
 const rc=$('radar2d'),rg=rc.getContext('2d');const rtex=new THREE.CanvasTexture(rc);rtex.colorSpace=THREE.SRGBColorSpace;
@@ -392,14 +399,14 @@ function noise(d,f=800,v=.2){if(!ac)return;const b=ac.createBuffer(1,ac.sampleRa
   const s=ac.createBufferSource(),fl=ac.createBiquadFilter(),g=ac.createGain();s.buffer=b;fl.type='lowpass';fl.frequency.value=f;g.gain.value=v;s.connect(fl).connect(g).connect(ac.destination);s.start()}
 const SND={gold:()=>{tone(880,1760,.12);setTimeout(()=>tone(1320,2640,.15),70)},hurt:()=>{tone(300,60,.6,'sawtooth',.12);noise(.4,500,.2)},
   open:()=>{tone(392,1568,.5);setTimeout(()=>tone(523,2093,.6,'triangle'),200)},fall:()=>noise(1.6,1400,.25),rumble:()=>noise(2.5,180,.5),
-  drip:()=>tone(1800+Math.random()*900,600,.12,'sine',.05),chirp:()=>{const b=2600+Math.random()*900;[0,90,170,260].forEach((d,i)=>setTimeout(()=>tone(b+(i%2)*500,b*1.3,.07,'sine',.035),d))},dig:()=>{noise(.35,900,.35);tone(160,70,.2,'triangle',.12)},clank:()=>tone(1200,900,.08,'square',.05),trap:()=>{tone(220,110,.4,'sawtooth',.08)},thud:()=>noise(.6,150,.5),growl:()=>tone(90,55,.5,'sawtooth',.05)};
+  drip:()=>tone(1800+Math.random()*900,600,.12,'sine',.05),smash:()=>{noise(.5,1800,.35);tone(300,80,.3,'triangle',.1)},knock:()=>{noise(.12,600,.3)},chirp:()=>{const b=2600+Math.random()*900;[0,90,170,260].forEach((d,i)=>setTimeout(()=>tone(b+(i%2)*500,b*1.3,.07,'sine',.035),d))},dig:()=>{noise(.35,900,.35);tone(160,70,.2,'triangle',.12)},clank:()=>tone(1200,900,.08,'square',.05),trap:()=>{tone(220,110,.4,'sawtooth',.08)},thud:()=>noise(.6,150,.5),growl:()=>tone(90,55,.5,'sawtooth',.05)};
 
 /* ================= spiller-tilstand ================= */
 let state='menu',mode='desktop',isAR=false,level=0,lives=5,goldGot=0,goldTotal=0,totalGold=0,stT=0,pf=0,graceT=0,growlT=0,dripT=3;
 const keys=new Set();let yaw=0,pitch=0;
 const tmpV=new THREE.Vector3(),tmpV2=new THREE.Vector3();
 function headLocal(){return camera.position}
-function headWorld(v=new THREE.Vector3()){rig.updateMatrixWorld();return v.copy(camera.position).applyMatrix4(rig.matrixWorld)}
+function headWorld(v=new THREE.Vector3()){rig.updateMatrixWorld();return v.copy(camera.position).applyMatrix4(body.matrixWorld)}
 function setHeadXZ(x,z){rig.updateMatrixWorld();const h=headWorld();rig.position.x+=x-h.x;rig.position.z+=z-h.z}
 function turn(a){rig.updateMatrixWorld();const h=headWorld();rig.rotation.y+=a;rig.updateMatrixWorld();const h2=headWorld();rig.position.x+=h.x-h2.x;rig.position.z+=h.z-h2.z}
 function cellOfHead(){const h=headWorld();return wc(h.x,h.z)}
@@ -412,14 +419,29 @@ function ropeAt(f,x,z){return L.ropes.find(r=>r.f==f&&r.cells.some(c=>c[0]==x&&c
 function walkable(f,x,z){if(!isOpen(f,x,z))return false;const h=holes.get(f+','+x+','+z);return!h||!!h.troll}
 function openAt(f,wx,wz){const[x,z]=wc(wx,wz);return isOpen(f,x,z)}
 function walkAt(f,wx,wz){const[x,z]=wc(wx,wz);return walkable(f,x,z)}
-function freeAt(f,wx,wz){for(const[ox,oz]of[[RADIUS,RADIUS],[-RADIUS,RADIUS],[RADIUS,-RADIUS],[-RADIUS,-RADIUS]])if(!walkAt(f,wx+ox,wz+oz))return false;return true}
-function moveBy(dx,dz){if(climbing())return;const h=headWorld();
+function freeAt(f,wx,wz,rad=RADIUS,skip=null){for(const[ox,oz]of[[rad,rad],[-rad,rad],[rad,-rad],[-rad,-rad]])if(!walkAt(f,wx+ox,wz+oz))return false;
+  for(const o of obst)if(o.f==f&&Math.hypot(o.x-wx,o.z-wz)<o.r+rad*.85)return false;
+  for(const b of barrelEnts)if(b!==skip&&b.f==f&&!b.dead&&Math.hypot(b.g.position.x-wx,b.g.position.z-wz)<.3+rad*.85)return false;return true}
+let obst=[],barrelEnts=[];
+const hoopMat=new THREE.MeshStandardMaterial({color:0x3a3530,metalness:.8,roughness:.5});
+function makeBarrel(f,x,z){const g=new THREE.Group();const b=new THREE.Mesh(new THREE.CylinderGeometry(.27,.27,.82,14),MAT.barrel);b.position.y=.41;g.add(b);
+  const mid=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.4,14),MAT.barrel);mid.position.y=.41;g.add(mid);
+  for(const y of[.12,.7]){const h=new THREE.Mesh(new THREE.TorusGeometry(.285,.018,5,18),hoopMat);h.rotation.x=Math.PI/2;h.position.y=y;g.add(h)}
+  g.position.set(x,floorY(f),z);g.rotation.y=h3(x*10|0,z*10|0,f)*6;mine.add(g);barrelEnts.push({f,g,hold:null,bash:0})}
+function barrelInCell(f,x,z){return barrelEnts.find(b=>!b.dead&&b.f==f&&(([bx,bz])=>bx==x&&bz==z)(wc(b.g.position.x,b.g.position.z)))}
+function pushBarrels(f,hx,hz,dx,dz){// spilleren dytter tønner foran seg
+  for(const b of barrelEnts){if(b.dead||b.f!=f)continue;const p=b.g.position,d=Math.hypot(p.x-(hx+dx),p.z-(hz+dz));if(d<.3+RADIUS*.85){
+    const nx=p.x+dx*1.05,nz=p.z+dz*1.05;if(freeAt(f,nx,nz,.3,b)&&!trolls.some(t=>Math.hypot(t.position.x-nx,t.position.z-nz)<.5)){p.x=nx;p.z=nz;b.g.rotation.y+=Math.hypot(dx,dz)*2}}}}
+function smashBarrel(b){b.dead=true;SND.smash();const p=b.g.position.clone();disposeGroup(b.g);
+  for(let i=0;i<7;i++){const s=new THREE.Mesh(new THREE.BoxGeometry(.08,.5,.04),MAT.barrel);s.position.set(p.x+(Math.random()-.5)*.8,p.y+.03,p.z+(Math.random()-.5)*.8);s.rotation.set(Math.PI/2,Math.random()*6,0);mine.add(s)}}
+function moveBy(dx,dz){if(climbing())return;const h=headWorld();pushBarrels(pf,h.x,h.z,dx,dz);
   {const[cx,cz]=wc(h.x,h.z),r=ropeAt(pf,cx,cz)||ropeAt(pf,...wc(h.x+dx*4,h.z+dz*4));if(r&&isChasm(pf,...wc(h.x+dx,h.z+dz))||r&&isChasm(pf,cx,cz)){const[ax,az]=cw(...r.a);if(r.dx){dz=(az-h.z)*.2}else{dx=(ax-h.x)*.2}}}
   if(freeAt(pf,h.x+dx,h.z))rig.position.x+=dx;else if(freeAt(pf,h.x+dx*.3,h.z))rig.position.x+=dx*.3;
   headWorld(h);if(freeAt(pf,h.x,h.z+dz))rig.position.z+=dz;else if(freeAt(pf,h.x,h.z+dz*.3))rig.position.z+=dz*.3}
 function climb(dy){const[x,z]=cellOfHead();const la=ladderAt(x,z,pf)||ladderAt(x,z,nearestFloor(rig.position.y));if(!la)return false;
   rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+dy));pf=nearestFloor(rig.position.y);hugLadder(la);return true}
 function hugLadder(la){const h=headWorld(),[ax,az]=cw(la.x,la.z),side=Math.sign(h.z-az)||1;const tx=ax,tz=az+side*.42;setHeadXZ(h.x+(tx-h.x)*.15,h.z+(tz-h.z)*.15)}
+const vel={x:0,z:0};let comfortT=0,vignetteOn=true;
 let climbDir=0,ladderLock=false,ladderHint=false,climbedFrame=false,ropeHint=false,cartHint='';
 function ropeNear(p){for(const r of L.ropes){if(r.f!=pf)continue;const ab=r.B.clone().sub(r.A),t=Math.max(0,Math.min(1,p.clone().sub(r.A).dot(ab)/ab.lengthSq())),q=r.curve.getPoint(t);if(q.distanceTo(p)<.3)return r}return null}
 // skyv fremover ved stigen: klatre ned (fra toppen) eller opp (fra bunnen); bakover snur retningen
@@ -434,7 +456,7 @@ function ladderStick(fwdAmt,dt){const h=headWorld(),[cx,cz]=wc(h.x,h.z),la=ladde
 
 /* ================= kontrollere ================= */
 const ctrls=[];
-for(let i=0;i<2;i++){const c=renderer.xr.getController(i),g=renderer.xr.getControllerGrip(i);rig.add(c,g);
+for(let i=0;i<2;i++){const c=renderer.xr.getController(i),g=renderer.xr.getControllerGrip(i);body.add(c,g);
   const o={c,g,hand:null,gp:null,grab:false,lastY:0,aim:false};ctrls.push(o);
   const glove=new THREE.Mesh(new THREE.BoxGeometry(.07,.04,.13),new THREE.MeshStandardMaterial({color:0x6a4a2c,roughness:.9}));glove.position.z=.02;g.add(glove);
   c.addEventListener('connected',e=>{o.hand=e.data.handedness;o.gp=e.data.gamepad;if(o.hand=='left')g.add(radar);if(o.hand=='right')g.add(pick)});
@@ -459,7 +481,7 @@ function startIntro(){state='intro';stT=0;rig.position.set(0,0,0);rig.rotation.s
   room.visible=true;vrFloor.visible=!isAR;hatch.position.set(h.x,0,h.z);doors.forEach(d=>d.rotation.z=0);crack.material.color.set(0xff8a2a);
   renderer.setClearColor(0x000000,isAR?0:1);scene.fog.density=isAR?0:.03;fadeMat.opacity=0;
   say('Hør …',2600,'Noe knaker under gulvet');SND.rumble()}
-function dropIn(fromY){state='fall';stT=0;rig.position.y=fromY;mine.visible=true;shaft.visible=true;room.visible=false;renderer.setClearColor(0x000000,1);scene.fog.density=.07;SND.fall()}
+function dropIn(fromY){state='fall';stT=0;rig.position.y=fromY;mine.visible=true;shaft.visible=true;room.visible=false;renderer.setClearColor(0x000000,1);scene.fog.density=.05;SND.fall()}
 function landed(){state='play';pf=0;rig.position.y=floorY(0);graceT=3;goldGot=0;goldTotal=L.gold.length;
   say(`Nivå ${level+1}`,2800,`${goldTotal} gullklumper · ${trolls.length} troll · ${L.F} etasjer\nSe på venstre håndledd for radar`)}
 function openExit(){exitOpen=true;SND.open();exitGroup.getObjectByName('lid').visible=false;['hole','rim'].forEach(n=>exitGroup.getObjectByName(n).visible=true);
@@ -509,7 +531,8 @@ function updTrolls(dt){const[px,pz]=cellOfHead(),tgt=[pf,px,pz],sp=.95+level*.11
       continue}
     if(u.p>=1){if(u.to){[u.f,u.x,u.z]=u.to;u.to=null;u.fromPit=false;
         const hh=holes.get([u.f,u.x,u.z].join());if(hh&&!hh.troll){hh.troll=t;u.trap=3.8;u.inPit=true;t.position.y=floorY(u.f)-PIT+.08;SND.trap();continue}}
-      if(graceT<=0){const n=nextStep(u,tgt);if(n&&!trolls.some(o=>o!==t&&((o.userData.to&&o.userData.to.join()==n.join())||(!o.userData.to&&o.userData.f==n[0]&&o.userData.x==n[1]&&o.userData.z==n[2])))){u.from=[u.f,u.x,u.z];u.to=n;u.p=0}}}
+      if(graceT<=0){const n=nextStep(u,tgt);const bb=n&&barrelInCell(...n);if(bb){u.bashT=(u.bashT||0)+dt;t.lookAt(bb.g.position.x,t.position.y,bb.g.position.z);const w=performance.now()/90;t.userData.body.getObjectByName('arm-1').rotation.x=-1.5+Math.sin(w)*1.2;t.userData.body.getObjectByName('arm1').rotation.x=-1.5-Math.sin(w)*1.2;if(Math.random()<dt*3)SND.knock();if(u.bashT>2.8){u.bashT=0;smashBarrel(bb)}continue}u.bashT=0;
+        if(n&&!trolls.some(o=>o!==t&&((o.userData.to&&o.userData.to.join()==n.join())||(!o.userData.to&&o.userData.f==n[0]&&o.userData.x==n[1]&&o.userData.z==n[2])))){u.from=[u.f,u.x,u.z];u.to=n;u.p=0}}}
     if(u.to){const vert=u.to[0]!=u.from[0];u.p=Math.min(1,u.p+dt*(vert?.55:sp)/(vert?FLOOR_H:CELL));
       const[ax,az]=cw(u.from[1],u.from[2]),[bx,bz]=cw(u.to[1],u.to[2]),ay=floorY(u.from[0])-(u.fromPit?PIT-.08:0)-(isChasm(...u.from)?.8:0),by=floorY(u.to[0])-(isChasm(...u.to)?.8:0);
       const off=vert?.48*Math.min(1,u.p*5,(1-u.p)*5):0;t.position.set(ax+(bx-ax)*u.p,ay+(by-ay)*u.p,az+(bz-az)*u.p+off);
@@ -560,6 +583,7 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
   if(state=='pause'){menuInput()}
   if(state=='glide'){updGlide(dt);updTrolls(dt);updHoles(dt)}
   if(mine&&mine.visible)updProps(dt);
+  {const tgtA=vignetteOn&&(state=='play'||state=='glide')&&mode!='desktop'?Math.min(1,comfortT+(state=='glide'?.6:0)):0;vigA+=(tgtA-vigA)*Math.min(1,dt*6);vig.material.opacity=vigA*.95;vig.visible=vigA>.02;comfortT=0}
   if(state=='play'){graceT-=dt;input(dt);updHoles(dt);menuButtons();
     const[cx,cz]=cellOfHead();if(!climbing()){pf=nearestFloor(rig.position.y);const la=ladderAt(cx,cz,pf);if(!la){const ty=restY();rig.position.y+=(ty-rig.position.y)*Math.min(1,dt*10)}}
     const h=headWorld();fadeMat.opacity=openAt(pf,h.x,h.z)?0:.92;fadeMat.color.set(0);
@@ -569,7 +593,7 @@ renderer.setAnimationLoop(()=>{const dt=Math.min(.05,clock.getDelta());stT+=dt;
       if(byHead||byHand){g.visible=false;goldGot++;SND.gold();if(goldGot>=goldTotal)openExit();else say(`Gull ${goldGot}/${goldTotal}`,1200)}}
     if(exitOpen){exitGroup.getObjectByName('rim').material.opacity=.6+.4*Math.sin(performance.now()/200);
       if(pf==L.F-1&&cx==L.exit[0]&&cz==L.exit[1]&&!climbing())nextLevel()}
-    {const rl=rails.find(r=>r.f==pf&&r.cells[r.at][0]==cx&&r.cells[r.at][1]==cz),k=rl?rl.f+','+cx+','+cz:'';if(k&&k!=cartHint){say('Gruvetralle',2200,mode=='desktop'?'Trykk E for å kjøre':'Trykk A på høyre kontroll for å kjøre');}cartHint=k}
+    {const rl=rails.find(r=>r.f==pf&&r.cells[r.at][0]==cx&&r.cells[r.at][1]==cz),k=rl?rl.f+','+cx+','+cz:'';if(k&&k!=cartHint){say('Gruvetralle',2200,mode=='desktop'?'Trykk E for å kjøre':'Trykk avtrekkeren eller klikk styrespaken for å kjøre');}cartHint=k}
     if(!ropeHint&&L.ropes.some(r=>r.f==pf&&(r.a[0]==cx&&r.a[1]==cz||r.b[0]==cx&&r.b[1]==cz))){ropeHint=true;say('Kløft med tau',3000,mode=='tele'?'Sikt over kløften og slipp – du henger deg over\neller hold grepknappen på tauet og dra deg bortover':mode=='desktop'?'Gå rett frem for å henge deg over':'Gå frem for å henge deg over\neller hold grepknappen på tauet og dra deg bortover')}
     updTrolls(dt);
     dripT-=dt;if(dripT<0){SND.drip();dripT=2+Math.random()*6}}
@@ -598,7 +622,10 @@ function input(dt){
       if(la){const[lx,lz]=cw(la.x,la.z);if(Math.hypot(p.x-lx,p.z-lz)<.75){if(!o.nearLad){o.nearLad=true;try{o.gp.hapticActuators[0].pulse(.25,30)}catch(e){}}if(o.grab){const d=o.lastY-ly;if(Math.abs(d)<.3){const h=headWorld();const[hx,hz]=wc(h.x,h.z);if(hx!=la.x||hz!=la.z)setHeadXZ(lx+(h.x-lx)*.3,lz+(h.z-lz)*.3);
               rig.position.y=Math.max(floorY(la.bottom),Math.min(floorY(la.top),rig.position.y+d));pf=nearestFloor(rig.position.y)}}
           o.grab=true;grabbing=true}else{o.grab=false;o.nearLad=false}}else o.grab=false}else o.grab=false;o.lastY=ly;
-    const rp=sq&&!o.grab&&ropeNear(o.g.getWorldPosition(new THREE.Vector3()));
+    {const hp=o.g.getWorldPosition(new THREE.Vector3());
+      if(sq&&!o.grab&&!o.carry){const b=barrelEnts.find(b=>!b.dead&&b.f==pf&&Math.hypot(b.g.position.x-hp.x,b.g.position.z-hp.z)<.4&&hp.y<floorY(pf)+1.3);if(b){o.carry=b;try{o.gp.hapticActuators[0].pulse(.4,40)}catch(e){}}}
+      if(!sq)o.carry=null;if(o.carry){const b=o.carry,nx=b.g.position.x+(hp.x-b.g.position.x)*.5,nz=b.g.position.z+(hp.z-b.g.position.z)*.5;if(freeAt(pf,nx,nz,.3,b)){b.g.position.x=nx;b.g.position.z=nz}grabbing=true}}
+    const rp=sq&&!o.grab&&!o.carry&&ropeNear(o.g.getWorldPosition(new THREE.Vector3()));
     if(rp){if(o.grabR&&o.lastL){const d=o.g.position.clone().sub(o.lastL).applyEuler(rig.rotation),m=-(rp.dx?d.x:d.z);
         if(Math.abs(m)<.3){const h=headWorld(),nx=h.x+(rp.dx?m:0),nz=h.z+(rp.dx?0:m),[tx,tz]=wc(nx,nz);
           if(walkable(rp.f,tx,tz)&&(rp.cells.some(c=>c[0]==tx&&c[1]==tz)||(rp.a[0]==tx&&rp.a[1]==tz)||(rp.b[0]==tx&&rp.b[1]==tz)))setHeadXZ(nx,nz)}}
@@ -606,12 +633,13 @@ function input(dt){
     o.lastL=(o.lastL||new THREE.Vector3()).copy(o.g.position)}
   if(R_){const[rx,ry]=axes(R_.gp);
     if(!(mode=='tele'&&R_.aim)){if(snapTurn){if(Math.abs(rx)>.7&&!snapLock){turn(-Math.sign(rx)*Math.PI/6);snapLock=true}if(Math.abs(rx)<.3)snapLock=false}
-      else if(Math.abs(rx)>.15){const v=(Math.abs(rx)-.15)/.85;turn(-Math.sign(rx)*v*v*2.2*dt)}}
-    aimDig(R_);if(hit(R_,0)&&digTarget){dig(...digTarget);swingT=.35;try{R_.gp.hapticActuators&&R_.gp.hapticActuators[0]&&R_.gp.hapticActuators[0].pulse(.8,90)}catch(e){}}
+      else if(Math.abs(rx)>.15){const v=(Math.abs(rx)-.15)/.85;turn(-Math.sign(rx)*v*v*1.6*dt);comfortT=Math.max(comfortT,v)}}
+    aimDig(R_);if(hit(R_,0)&&!tryRide()&&digTarget){dig(...digTarget);swingT=.35;try{R_.gp.hapticActuators&&R_.gp.hapticActuators[0]&&R_.gp.hapticActuators[0].pulse(.8,90)}catch(e){}}
     if(mode=='smooth'){if(Math.abs(ry)>.4){climb(-ry*1.6*dt);climbedFrame=true}}
     else{if(ry<-.6){R_.aim=true;aimTele(R_)}else if(R_.aim&&ry>-.3){R_.aim=false;doTele();ray.visible=marker.visible=false}}}
-  if(L_){const[lx,ly]=axes(L_.gp);if(ladderStick(-ly,dt))climbedFrame=true;else if(mode=='smooth'&&Math.hypot(lx,ly)>.15){const sp=2.2*dt;moveBy((fwd.x*-ly+right.x*lx)*sp,(fwd.z*-ly+right.z*lx)*sp)}}
-  if(R_&&hit(R_,4))tryRide();
+  if(L_){const[lx,ly]=axes(L_.gp);if(ladderStick(-ly,dt))climbedFrame=true;else if(mode=='smooth'&&Math.hypot(lx,ly)>.15){const[hx,hz]=cellOfHead(),onRope=isChasm(pf,hx,hz),sp=(onRope?.8:1.8)*dt;
+      vel.x+=((fwd.x*-ly+right.x*lx)*sp-vel.x)*Math.min(1,dt*8);vel.z+=((fwd.z*-ly+right.z*lx)*sp-vel.z)*Math.min(1,dt*8);moveBy(vel.x,vel.z);comfortT=Math.max(comfortT,Math.min(1,Math.hypot(lx,ly)))}else{vel.x=vel.z=0}}
+  for(const o of ctrls)if(o.gp&&(hit(o,3)||(o.hand=='left'&&hit(o,0))))tryRide();
   if(!grabbing&&!climbedFrame&&climbing()){const top=restY();if(Math.abs(rig.position.y-top)<.6)rig.position.y+=(top-rig.position.y)*Math.min(1,dt*4)}
 }
 function hit(o,i){const p=btn(o.gp,i),w=o['p'+i];o['p'+i]=p;return p&&!w}
@@ -624,12 +652,12 @@ const mc=document.createElement('canvas');mc.width=1024;mc.height=1024;const mg=
 const menuPanel=new THREE.Mesh(new THREE.PlaneGeometry(.8,.8),new THREE.MeshBasicMaterial({map:mtex,transparent:true,depthTest:false,fog:false}));menuPanel.renderOrder=1000;menuPanel.visible=false;scene.add(menuPanel);
 const MENU=()=>[['Fortsett',()=>closeMenu()],['Start nivået på nytt',()=>{closeMenu();restartLevel()}],
   [`Bevegelse: ${mode=='tele'?'teleport':'styrespak'}`,()=>{mode=mode=='tele'?'smooth':'tele';drawMenu()}],
-  [`Sving: ${snapTurn?'i hakk':'myk'}`,()=>{snapTurn=!snapTurn;drawMenu()}],['Avslutt spillet',()=>{const s=renderer.xr.getSession();if(s)s.end()}]];
+  [`Sving: ${snapTurn?'i hakk':'myk'}`,()=>{snapTurn=!snapTurn;drawMenu()}],[`Komfort-vignett: ${vignetteOn?'på':'av'}`,()=>{vignetteOn=!vignetteOn;drawMenu()}],[`Spiller sittende: ${seatOff?'ja':'nei'}`,()=>{seatOff=seatOff?0:.45;body.position.y=seatOff;drawMenu()}],['Avslutt spillet',()=>{const s=renderer.xr.getSession();if(s)s.end()}]];
 function drawMenu(){mg.clearRect(0,0,1024,1024);mg.fillStyle='rgba(18,12,9,.92)';mg.beginPath();mg.roundRect(8,8,1008,1008,40);mg.fill();mg.strokeStyle='#f6c64a';mg.lineWidth=5;mg.stroke();
   mg.textAlign='center';mg.fillStyle='#f6c64a';mg.font='bold 72px system-ui,sans-serif';mg.fillText('Pause',512,120);
   mg.fillStyle='#f3e6d0';mg.font='34px system-ui,sans-serif';mg.fillText(`Nivå ${level+1} · Gull ${goldGot}/${goldTotal} · Liv ${lives}`,512,180);
-  MENU().forEach(([t],i)=>{const y=230+i*150;mg.fillStyle=i==menuSel?'#f6c64a':'#3a2a20';mg.beginPath();mg.roundRect(120,y,784,120,24);mg.fill();
-    mg.fillStyle=i==menuSel?'#2a1c14':'#f3e6d0';mg.font='bold 52px system-ui,sans-serif';mg.fillText(t,512,y+78)});mtex.needsUpdate=true}
+  MENU().forEach(([t],i)=>{const y=220+i*112;mg.fillStyle=i==menuSel?'#f6c64a':'#3a2a20';mg.beginPath();mg.roundRect(110,y,804,96,22);mg.fill();
+    mg.fillStyle=i==menuSel?'#2a1c14':'#f3e6d0';mg.font='bold 46px system-ui,sans-serif';mg.fillText(t,512,y+64)});mtex.needsUpdate=true}
 function openMenu(){if(state!='play'&&state!='hurt')return;pausedFrom=state;state='pause';menuSel=-1;
   const h=headWorld(),dir=camera.getWorldDirection(new THREE.Vector3());dir.y=0;dir.normalize();menuPanel.position.set(h.x+dir.x*1.1,h.y-.1,h.z+dir.z*1.1);
   menuPanel.lookAt(h.x,h.y-.1,h.z);drawMenu();menuPanel.visible=true;digMark.visible=marker.visible=false}
@@ -638,7 +666,7 @@ function menuButtons(){for(const o of ctrls)if(o.gp&&(hit(o,4)&&o.hand=='left'||
 function menuInput(){if(mode=='desktop')return;let sel=-1,click=false;
   for(const o of ctrls){if(!o.gp)continue;if(hit(o,5)||(o.hand=='left'&&hit(o,4))){closeMenu();return}
     const p=o.c.getWorldPosition(new THREE.Vector3()),q=o.c.getWorldQuaternion(new THREE.Quaternion());raycaster.set(p,new THREE.Vector3(0,0,-1).applyQuaternion(q));raycaster.far=5;
-    const hs=raycaster.intersectObject(menuPanel);if(hs[0]&&o.hand=='right'||hs[0]&&sel<0){const uv=hs[0].uv,py=(1-uv.y)*1024,i=Math.floor((py-230)/150);if(i>=0&&i<5&&(py-230)%150<120&&uv.x>.12&&uv.x<.88)sel=i;
+    const hs=raycaster.intersectObject(menuPanel);if(hs[0]&&o.hand=='right'||hs[0]&&sel<0){const uv=hs[0].uv,py=(1-uv.y)*1024,i=Math.floor((py-220)/112);if(i>=0&&i<MENU().length&&(py-220)%112<96&&uv.x>.12&&uv.x<.88)sel=i;
       if(o.hand=='right'||!ctrls.some(c=>c.hand=='right'&&c.gp)){ray.visible=true;ray.geometry.setFromPoints([p,hs[0].point]);ray.material.color.set(0xf6c64a)}}
     if(hit(o,0)&&sel>=0)click=true}
   if(sel!=menuSel){menuSel=sel;drawMenu()}if(click){const a=MENU()[sel];a&&a[1]()}}
@@ -699,7 +727,7 @@ renderer.domElement.addEventListener('click',()=>{if(mode=='desktop'&&state!='me
 addEventListener('mousemove',e=>{if(document.pointerLockElement===renderer.domElement){yaw-=e.movementX*.0025;pitch=Math.max(-1.3,Math.min(1.3,pitch-e.movementY*.0025))}});
 addEventListener('keydown',e=>{keys.add(e.code);if(e.code=='Escape'&&mode=='desktop'&&!renderer.xr.isPresenting){if(state=='play'){pausedFrom='play';$('bResume').hidden=false}state='pause';$('menu').classList.remove('hide');rc.style.display='none';$('hint').style.display='none';$('cross').style.display='none'}});
 addEventListener('keyup',e=>keys.delete(e.code));
-window.__dbg={cellOfHead,get rails(){return rails.map(r=>({f:r.f,cells:r.cells,at:r.at}))},get ropes(){return L.ropes},tryRide,get pf(){return pf},setLevel(n){level=n;restartLevel()},get lanterns(){return lanterns.map(l=>[l.f,l.x,l.z])},get cages(){return cages.map(l=>[l.f,l.x,l.z])},wc:(x,z)=>wc(x,z),dig,get holes(){return holes},openMenu,goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
+window.__dbg={get barrels(){return barrelEnts.filter(b=>!b.dead).map(b=>[b.f,b.g.position.x,b.g.position.z])},get obst(){return obst.length},cellOfHead,get rails(){return rails.map(r=>({f:r.f,cells:r.cells,at:r.at}))},get ropes(){return L.ropes},tryRide,get pf(){return pf},setLevel(n){level=n;restartLevel()},get lanterns(){return lanterns.map(l=>[l.f,l.x,l.z])},get cages(){return cages.map(l=>[l.f,l.x,l.z])},wc:(x,z)=>wc(x,z),dig,get holes(){return holes},openMenu,goto(f,x,z){const[wx,wz]=cw(x,z);rig.position.y=floorY(f);pf=f;setHeadXZ(wx,wz)},get trolls(){return trolls},get exitOpen(){return exitOpen},get lives(){return lives},set yaw(v){yaw=v},set pitch(v){pitch=v},get state(){return state},get level(){return level},get gold(){return goldGot},get L(){return L},rig,headWorld};
 if(navigator.xr){Promise.all([navigator.xr.isSessionSupported('immersive-vr').catch(()=>false),navigator.xr.isSessionSupported('immersive-ar').catch(()=>false)]).then(([vr,ar])=>{
   const ok=vr||ar;supAR=ar;$('bSmooth').disabled=$('bTele').disabled=!ok;
   $('xrnote').textContent=ok?(ar?'Klar for VR. Du starter i stua med kamera-gjennomsyn.':'Klar for VR.'):'VR er ikke tilgjengelig her. Åpne siden i nettleseren på Meta Quest 3.'})}
