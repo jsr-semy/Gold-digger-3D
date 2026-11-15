@@ -1,5 +1,7 @@
 # Gullgraveren: Dypet
 
+## ▶ [SPILL HER: jsr-semy.github.io/Gold-digger-3D](https://jsr-semy.github.io/Gold-digger-3D/?v=2)
+
 Et førstepersons gruvespill for Meta Quest 3 (WebXR), inspirert av klassiske gull-og-troll-plattformspill.
 
 Gulvet i stua åpner seg, og du faller ned i en gruve full av gull og troll. Samle alt gullet på hvert nivå, finn hullet i nederste etasje og fall videre. Først etter siste nivå kommer du opp igjen.
